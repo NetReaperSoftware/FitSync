@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["react", "react-native"]
   },
-  //"include": ["env.d.ts", "src"]
+  "include": ["env.d.ts", "src"]
 }
