@@ -7,7 +7,8 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  FlatList
+  FlatList,
+  SafeAreaView
 } from 'react-native';
 
 type ExerciseSet = {
@@ -181,24 +182,25 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.content}>
-          <Text style={styles.header}>Workout Tracker</Text>
-          
-          {workouts.map(workout => renderWorkout(workout))}
-          
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setModalVisible(true)}
-          >
-            <Text style={styles.addButtonText}>+ Create New Workout</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-      
-      {/* New Workout Modal */}
-      <Modal
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.content}>
+            <Text style={styles.header}>Workout Tracker</Text>
+            
+            {workouts.map(workout => renderWorkout(workout))}
+            
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setModalVisible(true)}
+            >
+              <Text style={styles.addButtonText}>+ Create New Workout</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+        
+        {/* New Workout Modal */}
+        <Modal
         animationType="slide"
         transparent={true}
         visible={modalVisible}
@@ -255,14 +257,18 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  container: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,

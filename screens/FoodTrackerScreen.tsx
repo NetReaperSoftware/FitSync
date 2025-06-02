@@ -8,7 +8,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  FlatList
+  FlatList,
+  SafeAreaView
 } from 'react-native';
 
 type FoodItem = {
@@ -121,13 +122,14 @@ export default function FoodTrackerScreen(): React.JSX.Element {
   );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.content}>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.content}>
           <Text style={styles.header}>Food Tracker</Text>
           
           {/* Meal Type Selection */}
@@ -260,13 +262,17 @@ export default function FoodTrackerScreen(): React.JSX.Element {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  container: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,

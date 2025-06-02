@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView } from 'react-native';
 // @ts-ignore
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
 
@@ -30,9 +30,10 @@ export default function HomeScreen(): React.JSX.Element {
   });
 
   return (
-    <ScrollView style={styles.scrollView}>
-      <View style={styles.container}>
-        <Text style={styles.header}>Daily Overview</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.container}>
+          <Text style={styles.header}>Daily Overview</Text>
         
         {/* Calories Section */}
         <View style={styles.card}>
@@ -100,13 +101,17 @@ export default function HomeScreen(): React.JSX.Element {
         </View>
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
   },
   container: {
     flex: 1,
