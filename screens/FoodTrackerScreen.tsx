@@ -11,6 +11,7 @@ import {
   FlatList,
   SafeAreaView
 } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 type FoodItem = {
   id: string;
@@ -31,6 +32,7 @@ type MealEntry = {
 };
 
 export default function FoodTrackerScreen(): React.JSX.Element {
+  const { theme } = useTheme();
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [searchQuery, setSearchQuery] = useState('');
   const [todayEntries, setTodayEntries] = useState<MealEntry[]>([
@@ -110,6 +112,8 @@ export default function FoodTrackerScreen(): React.JSX.Element {
     setTodayEntries(todayEntries.filter(entry => entry.id !== id));
   };
 
+  const styles = createStyles(theme);
+
   const renderMealTypeButton = (type: 'breakfast' | 'lunch' | 'dinner' | 'snack', label: string) => (
     <TouchableOpacity
       style={[styles.mealTypeButton, mealType === type && styles.mealTypeButtonActive]}
@@ -145,6 +149,7 @@ export default function FoodTrackerScreen(): React.JSX.Element {
             <TextInput
               style={styles.searchInput}
               placeholder="Search for a food..."
+              placeholderTextColor={theme.textMuted}
               value={searchQuery}
               onChangeText={handleSearch}
             />
@@ -266,10 +271,10 @@ export default function FoodTrackerScreen(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   container: {
     flex: 1,
@@ -284,7 +289,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     marginVertical: 16,
-    color: '#333',
+    color: theme.text,
     textAlign: 'center',
   },
   mealTypeContainer: {
@@ -293,17 +298,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   mealTypeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#e0e0e0',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   mealTypeButtonActive: {
-    backgroundColor: '#4285F4',
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
   },
   mealTypeButtonText: {
-    color: '#555',
+    color: theme.textSecondary,
     fontWeight: '500',
+    fontSize: 14,
   },
   mealTypeButtonTextActive: {
     color: 'white',
@@ -312,40 +321,46 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   searchInput: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: theme.inputBackground,
+    borderRadius: 10,
+    padding: 14,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
+    color: theme.text,
   },
   searchResultsContainer: {
-    backgroundColor: 'white',
-    borderRadius: 8,
+    backgroundColor: theme.cardBackground,
+    borderRadius: 10,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
+    elevation: 2,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   searchResultItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.borderLight,
   },
   foodItemName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: theme.text,
   },
   foodItemDetails: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 2,
   },
   addText: {
-    color: '#4285F4',
+    color: theme.primary,
     fontWeight: '600',
   },
   todayEntriesContainer: {
@@ -355,29 +370,34 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#333',
+    color: theme.text,
   },
   mealSection: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: theme.cardBackground,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.borderLight,
+    elevation: 2,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
   },
   mealSectionHeader: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
-    color: '#444',
+    color: theme.text,
   },
   foodLogItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.borderLight,
   },
   foodLogItemDetails: {
     flex: 1,
@@ -385,15 +405,15 @@ const styles = StyleSheet.create({
   foodLogItemName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: theme.text,
   },
   foodLogItemMacros: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 2,
   },
   removeText: {
-    color: '#EA4335',
+    color: theme.error,
     fontWeight: '500',
   },
 });

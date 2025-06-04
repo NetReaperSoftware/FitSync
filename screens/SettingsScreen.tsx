@@ -8,10 +8,11 @@ import {
   Switch,
   SafeAreaView,
 } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function SettingsScreen(): React.JSX.Element {
+  const { theme, isDark, toggleTheme } = useTheme();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(true);
 
   const renderSettingItem = (
@@ -38,6 +39,8 @@ export default function SettingsScreen(): React.JSX.Element {
   const renderSectionHeader = (title: string) => {
     return <Text style={styles.sectionHeader}>{title}</Text>;
   };
+
+  const styles = createStyles(theme);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -67,7 +70,7 @@ export default function SettingsScreen(): React.JSX.Element {
               <Switch
                 value={notificationsEnabled}
                 onValueChange={setNotificationsEnabled}
-                trackColor={{ false: '#e0e0e0', true: '#4285F4' }}
+                trackColor={{ false: theme.border, true: theme.primary }}
                 thumbColor={notificationsEnabled ? '#ffffff' : '#f4f3f4'}
               />
             )}
@@ -75,10 +78,10 @@ export default function SettingsScreen(): React.JSX.Element {
               'Dark Mode',
               'Toggle dark theme',
               <Switch
-                value={darkModeEnabled}
-                onValueChange={setDarkModeEnabled}
-                trackColor={{ false: '#e0e0e0', true: '#4285F4' }}
-                thumbColor={darkModeEnabled ? '#ffffff' : '#f4f3f4'}
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor={isDark ? '#ffffff' : '#f4f3f4'}
               />
             )}
             {renderSettingItem(
@@ -87,7 +90,7 @@ export default function SettingsScreen(): React.JSX.Element {
               <Switch
                 value={syncEnabled}
                 onValueChange={setSyncEnabled}
-                trackColor={{ false: '#e0e0e0', true: '#4285F4' }}
+                trackColor={{ false: theme.border, true: theme.primary }}
                 thumbColor={syncEnabled ? '#ffffff' : '#f4f3f4'}
               />
             )}
@@ -123,10 +126,10 @@ export default function SettingsScreen(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   container: {
     flex: 1,
@@ -141,30 +144,32 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     marginVertical: 16,
-    color: '#333',
+    color: theme.text,
     textAlign: 'center',
   },
   sectionHeader: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4285F4',
+    color: theme.primary,
     marginTop: 24,
     marginBottom: 12,
     marginLeft: 4,
   },
   settingItem: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 8,
+    backgroundColor: theme.cardBackground,
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
   },
   settingTextContainer: {
     flex: 1,
@@ -172,28 +177,33 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: theme.text,
     marginBottom: 2,
   },
   settingSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
   },
   settingAction: {
     marginLeft: 12,
   },
   arrowText: {
     fontSize: 20,
-    color: '#ccc',
+    color: theme.textMuted,
     fontWeight: '300',
   },
   logoutButton: {
-    backgroundColor: '#ff4444',
-    borderRadius: 10,
-    padding: 16,
+    backgroundColor: theme.error,
+    borderRadius: 12,
+    padding: 18,
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 20,
     marginBottom: 32,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   logoutButtonText: {
     color: 'white',

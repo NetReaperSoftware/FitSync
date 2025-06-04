@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import {
   SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function LoginScreen({ navigation }: any): React.JSX.Element {
+  const { theme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -13,6 +15,8 @@ export default function LoginScreen({ navigation }: any): React.JSX.Element {
     navigation.replace('MainTabs');
   };
 
+  const styles = createStyles(theme);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.form}>
@@ -21,6 +25,7 @@ export default function LoginScreen({ navigation }: any): React.JSX.Element {
         <TextInput 
           style={styles.input} 
           placeholder="Email" 
+          placeholderTextColor={theme.textMuted}
           value={email} 
           onChangeText={setEmail} 
           keyboardType="email-address" 
@@ -29,6 +34,7 @@ export default function LoginScreen({ navigation }: any): React.JSX.Element {
         <TextInput 
           style={styles.input} 
           placeholder="Password" 
+          placeholderTextColor={theme.textMuted}
           value={password} 
           onChangeText={setPassword} 
           secureTextEntry 
@@ -47,10 +53,10 @@ export default function LoginScreen({ navigation }: any): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#fff' 
+    backgroundColor: theme.background 
   },
   form: { 
     flex: 1, 
@@ -62,29 +68,35 @@ const styles = StyleSheet.create({
     fontWeight: 'bold', 
     textAlign: 'center', 
     marginBottom: 10, 
-    color: '#4285F4' 
+    color: theme.primary 
   },
   subtitle: { 
     fontSize: 18, 
     textAlign: 'center', 
     marginBottom: 30, 
-    color: '#666' 
+    color: theme.textSecondary 
   },
   input: { 
-    backgroundColor: '#f5f5f5', 
+    backgroundColor: theme.inputBackground, 
     padding: 15, 
-    borderRadius: 10, 
+    borderRadius: 12, 
     marginBottom: 15, 
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0', 
+    borderColor: theme.inputBorder,
+    color: theme.text,
   },
   button: { 
-    backgroundColor: '#4285F4', 
+    backgroundColor: theme.primary, 
     padding: 15, 
-    borderRadius: 10, 
+    borderRadius: 12, 
     alignItems: 'center', 
-    marginTop: 10 
+    marginTop: 10,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   buttonText: { 
     color: '#fff', 
@@ -97,11 +109,11 @@ const styles = StyleSheet.create({
     marginTop: 20 
   },
   signupText: { 
-    color: '#666', 
+    color: theme.textSecondary, 
     fontSize: 16 
   },
   signupLink: { 
-    color: '#4285F4', 
+    color: theme.primary, 
     fontSize: 16, 
     fontWeight: 'bold' 
   },

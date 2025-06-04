@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView } from 'react-native';
-// @ts-ignore
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function HomeScreen(): React.JSX.Element {
+  const { theme } = useTheme();
+  
   // Mock data - would be replaced with actual data from a backend/state management
-  const [nutritionData, setNutritionData] = useState({
+  const [nutritionData] = useState({
     calories: {
       consumed: 1450,
       goal: 2000
@@ -29,6 +30,8 @@ export default function HomeScreen(): React.JSX.Element {
     }
   });
 
+  const styles = createStyles(theme);
+  
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.scrollView}>
@@ -105,10 +108,10 @@ export default function HomeScreen(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   scrollView: {
     flex: 1,
@@ -121,7 +124,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     marginVertical: 16,
-    color: '#333',
+    color: theme.text,
     textAlign: 'center',
   },
   sectionHeader: {
@@ -129,49 +132,52 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 20,
     marginBottom: 10,
-    color: '#333',
+    color: theme.text,
   },
   card: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    backgroundColor: theme.cardBackground,
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 14,
+    elevation: 3,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
-    color: '#444',
+    color: theme.text,
   },
   progressContainer: {
-    height: 12,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 6,
+    height: 14,
+    backgroundColor: theme.border,
+    borderRadius: 7,
     overflow: 'hidden',
     marginBottom: 8,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#4caf50',
+    backgroundColor: theme.success,
+    borderRadius: 7,
   },
   carbsBar: {
-    backgroundColor: '#4285F4', // Blue
+    backgroundColor: theme.primary,
   },
   proteinBar: {
-    backgroundColor: '#EA4335', // Red
+    backgroundColor: '#EA4335',
   },
   fatBar: {
-    backgroundColor: '#FBBC05', // Yellow/Orange
+    backgroundColor: theme.warning,
   },
   progressText: {
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'right',
-    color: '#555',
+    color: theme.textSecondary,
   },
 });

@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
 // Screens
 import SplashScreen from './screens/SplashScreen';
@@ -33,6 +34,8 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 // Bottom tabs navigator
 function MainTabNavigator(): React.JSX.Element {
+  const { theme } = useTheme();
+  
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -51,8 +54,12 @@ function MainTabNavigator(): React.JSX.Element {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#4285F4',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: theme.tabBarActive,
+        tabBarInactiveTintColor: theme.tabBarInactive,
+        tabBarStyle: {
+          backgroundColor: theme.tabBarBackground,
+          borderTopColor: theme.border,
+        },
         headerShown: false,
       })}
     >
@@ -81,10 +88,12 @@ function MainTabNavigator(): React.JSX.Element {
   );
 }
 
-export default function App(): React.JSX.Element {
+function AppContent(): React.JSX.Element {
+  const { isDark } = useTheme();
+  
   return (
     <NavigationContainer>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -92,5 +101,13 @@ export default function App(): React.JSX.Element {
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
       </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+export default function App(): React.JSX.Element {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
