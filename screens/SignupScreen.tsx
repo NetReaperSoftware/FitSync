@@ -7,20 +7,64 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SignupScreen({ navigation }: any): React.JSX.Element {
   const { theme } = useTheme();
+  const { signUp } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSignup = () => {
-    // In a real app, we would validate and create an account here
-    // For demo purposes, just navigate to the main app
-    navigation.replace('MainTabs');
+  const handleSignup = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Please enter your full name');
+      return;
+    }
+
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email');
+      return;
+    }
+
+    if (!password.trim()) {
+      Alert.alert('Error', 'Please enter a password');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await signUp(email.trim(), password, name.trim());
+      
+      if (error) {
+        Alert.alert('Sign Up Error', error.message);
+      } else {
+        Alert.alert(
+          'Sign Up Successful', 
+          'Please check your email to verify your account before signing in.',
+          [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const styles = createStyles(theme);
@@ -69,8 +113,14 @@ export default function SignupScreen({ navigation }: any): React.JSX.Element {
             secureTextEntry 
           />
           
-          <TouchableOpacity style={styles.button} onPress={handleSignup}>
-            <Text style={styles.buttonText}>Sign Up</Text>
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleSignup}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? 'Creating Account...' : 'Sign Up'}
+            </Text>
           </TouchableOpacity>
           
           <View style={styles.loginContainer}>
@@ -137,6 +187,9 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: '#fff', 
     fontSize: 18, 
     fontWeight: 'bold' 
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   loginContainer: { 
     flexDirection: 'row', 

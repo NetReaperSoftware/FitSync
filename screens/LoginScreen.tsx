@@ -1,18 +1,40 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginScreen({ navigation }: any): React.JSX.Element {
   const { theme } = useTheme();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    // In a real app, you would validate credentials here
-    // For now, we'll just navigate to the main app
-    navigation.replace('MainTabs');
+  const handleLogin = async () => {
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email');
+      return;
+    }
+
+    if (!password.trim()) {
+      Alert.alert('Error', 'Please enter your password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await signIn(email.trim(), password);
+      
+      if (error) {
+        Alert.alert('Login Error', error.message);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const styles = createStyles(theme);
@@ -39,8 +61,14 @@ export default function LoginScreen({ navigation }: any): React.JSX.Element {
           onChangeText={setPassword} 
           secureTextEntry 
         />
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Login</Text>
+        <TouchableOpacity 
+          style={[styles.button, loading && styles.buttonDisabled]} 
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>
+            {loading ? 'Signing In...' : 'Login'}
+          </Text>
         </TouchableOpacity>
         <View style={styles.signupContainer}>
           <Text style={styles.signupText}>Don't have an account? </Text>
@@ -102,6 +130,9 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: '#fff', 
     fontSize: 18, 
     fontWeight: 'bold' 
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   signupContainer: { 
     flexDirection: 'row', 

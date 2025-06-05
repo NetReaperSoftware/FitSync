@@ -7,13 +7,31 @@ import {
   ScrollView,
   Switch,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SettingsScreen(): React.JSX.Element {
   const { theme, isDark, toggleTheme } = useTheme();
+  const { signOut } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [syncEnabled, setSyncEnabled] = useState(true);
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive',
+          onPress: () => signOut()
+        }
+      ]
+    );
+  };
 
   const renderSettingItem = (
     title: string,
@@ -116,7 +134,7 @@ export default function SettingsScreen(): React.JSX.Element {
             )}
 
             {renderSectionHeader('Account Actions')}
-            <TouchableOpacity style={styles.logoutButton}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <Text style={styles.logoutButtonText}>Sign Out</Text>
             </TouchableOpacity>
           </View>

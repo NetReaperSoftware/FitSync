@@ -1,10 +1,11 @@
 import React from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Screens
 import SplashScreen from './screens/SplashScreen';
@@ -89,16 +90,38 @@ function MainTabNavigator(): React.JSX.Element {
 }
 
 function AppContent(): React.JSX.Element {
-  const { isDark } = useTheme();
+  const { isDark, theme } = useTheme();
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        backgroundColor: theme.background 
+      }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
   
   return (
     <NavigationContainer>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-      <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Signup" component={SignupScreen} />
-        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+      <Stack.Navigator 
+        initialRouteName={user ? "MainTabs" : "Splash"} 
+        screenOptions={{ headerShown: false }}
+      >
+        {user ? (
+          <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+        ) : (
+          <>
+            <Stack.Screen name="Splash" component={SplashScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -107,7 +130,9 @@ function AppContent(): React.JSX.Element {
 export default function App(): React.JSX.Element {
   return (
     <ThemeProvider>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ThemeProvider>
   );
 }
