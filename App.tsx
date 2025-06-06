@@ -71,7 +71,7 @@ function MainTabNavigator(): React.JSX.Element {
       <Tab.Screen 
         name="Home" 
         component={HomeScreen} 
-        options={{ tabBarLabel: 'Overview' }}
+        options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen 
         name="FoodTracker" 
