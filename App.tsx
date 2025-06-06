@@ -14,6 +14,7 @@ import SignupScreen from './screens/SignupScreen';
 import HomeScreen from './screens/HomeScreen';
 import FoodTrackerScreen from './screens/FoodTrackerScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import WorkoutTrackerScreen from './screens/WorkoutTrackerScreen';
 
 // Type definitions
 type RootStackParamList = {
@@ -26,8 +27,9 @@ type RootStackParamList = {
 type MainTabParamList = {
   Home: undefined;
   FoodTracker: undefined;
-  Settings: undefined;
+  WorkoutTracker: undefined;
   Profile: undefined;
+  Settings: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -47,10 +49,12 @@ function MainTabNavigator(): React.JSX.Element {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'FoodTracker') {
             iconName = focused ? 'restaurant' : 'restaurant-outline';
-          } else if (route.name === 'Settings') {
-            iconName = focused ? 'settings' : 'settings-outline';
+          } else if (route.name === 'WorkoutTracker') {
+            iconName = focused ? 'barbell' : 'barbell-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
+          } else if (route.name === 'Settings') {
+            iconName = focused ? 'settings' : 'settings-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -75,15 +79,20 @@ function MainTabNavigator(): React.JSX.Element {
         options={{ tabBarLabel: 'Food' }}
       />
       <Tab.Screen 
-        name="Settings" 
-        component={SettingsScreen}
-        options={{ tabBarLabel: 'Settings' }}
+        name="WorkoutTracker" 
+        component={WorkoutTrackerScreen}
+        options={{ tabBarLabel: 'Workouts' }}
       />
       {/* Profile tab placeholder - can be implemented later */}
       <Tab.Screen 
         name="Profile" 
         component={HomeScreen} // Using HomeScreen as a placeholder
         options={{ tabBarLabel: 'Profile' }}
+      />
+      <Tab.Screen 
+        name="Settings" 
+        component={SettingsScreen}
+        options={{ tabBarLabel: 'Settings' }}
       />
     </Tab.Navigator>
   );

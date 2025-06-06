@@ -10,6 +10,7 @@ import {
   FlatList,
   SafeAreaView
 } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 type ExerciseSet = {
   id: string;
@@ -34,6 +35,7 @@ type Workout = {
 };
 
 export default function WorkoutTrackerScreen(): React.JSX.Element {
+  const { theme } = useTheme();
   const [workouts, setWorkouts] = useState<Workout[]>([
     {
       id: '1',
@@ -136,6 +138,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     }
   };
 
+  const styles = createStyles(theme);
+
   const renderWorkout = (workout: Workout) => {
     return (
       <View key={workout.id} style={styles.workoutCard}>
@@ -213,6 +217,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
             <TextInput
               style={styles.input}
               placeholder="Workout Name"
+              placeholderTextColor={theme.textMuted}
               value={newWorkoutName}
               onChangeText={setNewWorkoutName}
             />
@@ -262,10 +267,10 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   container: {
     flex: 1,
@@ -280,41 +285,43 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     marginVertical: 16,
-    color: '#333',
+    color: theme.text,
     textAlign: 'center',
   },
   workoutCard: {
-    backgroundColor: 'white',
-    borderRadius: 10,
+    backgroundColor: theme.cardBackground,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
   },
   workoutTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginBottom: 4,
   },
   workoutDate: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 16,
   },
   exerciseContainer: {
     marginBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: theme.borderLight,
     paddingTop: 12,
   },
   exerciseName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#444',
+    color: theme.text,
     marginBottom: 8,
   },
   setsHeader: {
@@ -322,12 +329,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.borderLight,
     marginBottom: 8,
   },
   setHeaderText: {
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
     flex: 1,
     textAlign: 'center',
   },
@@ -337,12 +344,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.borderLight,
   },
   setText: {
     flex: 1,
     textAlign: 'center',
-    color: '#444',
+    color: theme.text,
   },
   completionButton: {
     width: 30,
@@ -354,17 +361,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
   completedButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: theme.success,
   },
   pendingButton: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: theme.border,
   },
   completionButtonText: {
     color: 'white',
     fontWeight: 'bold',
   },
   addButton: {
-    backgroundColor: '#4285F4',
+    backgroundColor: theme.primary,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -379,35 +386,39 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: theme.modalBackground,
   },
   modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 10,
+    backgroundColor: theme.surface,
+    borderRadius: 12,
     padding: 20,
     width: '90%',
     maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: theme.borderLight,
   },
   modalHeader: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#333',
+    color: theme.text,
     textAlign: 'center',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
+    backgroundColor: theme.inputBackground,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
     fontSize: 16,
+    color: theme.text,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
-    color: '#444',
+    color: theme.text,
   },
   exerciseList: {
     maxHeight: 300,
@@ -419,17 +430,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.borderLight,
   },
   selectedExercise: {
-    backgroundColor: '#e6f2ff',
+    backgroundColor: theme.primaryVariant + '20',
   },
   exerciseItemText: {
     fontSize: 16,
-    color: '#333',
+    color: theme.text,
   },
   selectedIcon: {
-    color: '#4285F4',
+    color: theme.primary,
     fontWeight: 'bold',
   },
   modalButtons: {
@@ -444,14 +455,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: theme.border,
   },
   cancelButtonText: {
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '600',
   },
   createButton: {
-    backgroundColor: '#4285F4',
+    backgroundColor: theme.primary,
   },
   createButtonText: {
     color: 'white',
