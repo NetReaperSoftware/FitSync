@@ -342,6 +342,67 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     );
   };
 
+  const toggleActiveWorkoutSetCompletion = (exerciseId: string, setId: string) => {
+    setCurrentWorkoutExercises(prevExercises => 
+      prevExercises.map(exercise => {
+        if (exercise.id !== exerciseId) return exercise;
+        
+        const updatedSets = exercise.sets.map(set => {
+          if (set.id !== setId) return set;
+          return { ...set, completed: !set.completed };
+        });
+        
+        return { ...exercise, sets: updatedSets };
+      })
+    );
+  };
+
+  const updateActiveWorkoutSet = (exerciseId: string, setId: string, field: 'weight' | 'reps', value: number) => {
+    setCurrentWorkoutExercises(prevExercises => 
+      prevExercises.map(exercise => {
+        if (exercise.id !== exerciseId) return exercise;
+        
+        const updatedSets = exercise.sets.map(set => {
+          if (set.id !== setId) return set;
+          return { ...set, [field]: value };
+        });
+        
+        return { ...exercise, sets: updatedSets };
+      })
+    );
+  };
+
+  const addSetToExercise = (exerciseId: string) => {
+    setCurrentWorkoutExercises(prevExercises => 
+      prevExercises.map(exercise => {
+        if (exercise.id !== exerciseId) return exercise;
+        
+        const newSet: ExerciseSet = {
+          id: `s${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          weight: 0,
+          reps: 0,
+          completed: false,
+        };
+        
+        return { ...exercise, sets: [...exercise.sets, newSet] };
+      })
+    );
+  };
+
+  const removeSetFromExercise = (exerciseId: string, setId: string) => {
+    setCurrentWorkoutExercises(prevExercises => 
+      prevExercises.map(exercise => {
+        if (exercise.id !== exerciseId) return exercise;
+        
+        // Don't allow removing the last set
+        if (exercise.sets.length <= 1) return exercise;
+        
+        const updatedSets = exercise.sets.filter(set => set.id !== setId);
+        return { ...exercise, sets: updatedSets };
+      })
+    );
+  };
+
 
   const styles = createStyles(theme);
 
@@ -461,25 +522,43 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
                           value={set.weight.toString()}
                           placeholder="0"
                           keyboardType="numeric"
+                          onChangeText={(text) => updateActiveWorkoutSet(exercise.id, set.id, 'weight', parseFloat(text) || 0)}
                         />
                         <TextInput
                           style={styles.setInput}
                           value={set.reps.toString()}
                           placeholder="0"
                           keyboardType="numeric"
+                          onChangeText={(text) => updateActiveWorkoutSet(exercise.id, set.id, 'reps', parseInt(text) || 0)}
                         />
                         <TouchableOpacity
                           style={[
                             styles.completionButton,
                             set.completed ? styles.completedButton : styles.pendingButton,
                           ]}
+                          onPress={() => toggleActiveWorkoutSetCompletion(exercise.id, set.id)}
                         >
                           <Text style={styles.completionButtonText}>
                             {set.completed ? '✓' : ''}
                           </Text>
                         </TouchableOpacity>
+                        {exercise.sets.length > 1 && (
+                          <TouchableOpacity
+                            style={styles.removeSetButton}
+                            onPress={() => removeSetFromExercise(exercise.id, set.id)}
+                          >
+                            <Text style={styles.removeSetButtonText}>−</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     ))}
+                    
+                    <TouchableOpacity
+                      style={styles.addSetButton}
+                      onPress={() => addSetToExercise(exercise.id)}
+                    >
+                      <Text style={styles.addSetButtonText}>+ Add Set</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
                 
@@ -488,7 +567,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
                   style={styles.addExerciseButton}
                   onPress={() => setExerciseModalVisible(true)}
                 >
-                  <Text style={styles.addButtonText}>+ Add Exercise</Text>
+                  <Text style={styles.addExerciseButtonText}>+ Add Exercise</Text>
                 </TouchableOpacity>
                 
                 {/* Discard Workout Button */}
@@ -1170,6 +1249,11 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+  addExerciseButtonText: {
+    color: theme.primary,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1367,5 +1451,135 @@ const createStyles = (theme: any) => StyleSheet.create({
   createButtonText: {
     color: 'white',
     fontWeight: '600',
+  },
+  folderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  folderToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  folderToggleIcon: {
+    fontSize: 16,
+    color: theme.textSecondary,
+    marginRight: 8,
+  },
+  optionsButton: {
+    padding: 8,
+    borderRadius: 4,
+    backgroundColor: theme.cardBackground,
+  },
+  optionsButtonText: {
+    fontSize: 18,
+    color: theme.textSecondary,
+    fontWeight: 'bold',
+  },
+  optionsMenu: {
+    backgroundColor: theme.surface,
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  optionItem: {
+    padding: 12,
+    borderRadius: 4,
+  },
+  optionText: {
+    fontSize: 16,
+    color: theme.text,
+    fontWeight: '500',
+  },
+  deleteOptionText: {
+    color: theme.error,
+  },
+  routineMainContent: {
+    flex: 1,
+  },
+  routineActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  startRoutineButton: {
+    backgroundColor: theme.primary,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  startRoutineButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  routineOptionsButton: {
+    padding: 8,
+    borderRadius: 4,
+    backgroundColor: theme.cardBackground,
+  },
+  routineOptionsMenu: {
+    backgroundColor: theme.surface,
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+    position: 'absolute',
+    right: 0,
+    top: 40,
+    zIndex: 1000,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  standaloneRoutineItem: {
+    backgroundColor: theme.background,
+    borderRadius: 6,
+    padding: 12,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+  },
+  addSetButton: {
+    backgroundColor: theme.cardBackground,
+    borderRadius: 6,
+    padding: 8,
+    alignItems: 'center',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: theme.primary,
+    borderStyle: 'dashed',
+  },
+  addSetButtonText: {
+    color: theme.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  removeSetButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  removeSetButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
