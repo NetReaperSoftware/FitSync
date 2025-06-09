@@ -32,14 +32,19 @@ export default function ExercisesScreen() {
 
   const fetchExercises = async () => {
     const { data, error } = await supabase
-      .from('fitness.exercises')
+      .schema('fitness')
+      .from('exercises')
       .select('*')
       .order('name');
 
     if (error) {
       console.error('Error fetching exercises:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error.details);
     } else {
       setExercises(data as Exercise[]);
+      console.log('Successfully fetched exercises:', data?.length || 0);
     }
 
     setLoading(false);

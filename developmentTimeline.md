@@ -58,5 +58,5 @@ Start Routine
 Routine2 ...
 Start Routine
 
-# 2d //NYI
-A new screen needs to be created that will list all availible exersises stored in the app. This screen will be pulled up after selecting "Add Exersise" button from the "Active Workout" and "New Workout" screens. Once clicking an exersize, it will be added to the routine or workout. By default, this screen will have no workouts initially until adding later.
+# 2d 
+There is a new screen ExerciseScreen.tsx that should list all exercises stored within my supabase database backend. WorkoutTrackerScreen needs to be updated to bring up this screen, and import workouts from it when adding exercises into a New Workout or in a Routine.
