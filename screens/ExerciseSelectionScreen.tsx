@@ -44,15 +44,34 @@ export default function ExerciseSelectionScreen({
   const equipmentOptions = ['All Equipment', 'None', 'Barbell', 'Dumbbell', 'Machine', 'Other'];
   
   // Get unique muscle groups from exercises
-  const muscleGroupOptions = useMemo(() => {
-    const uniqueMuscles = new Set(['All Muscles']);
+  const muscleGroupOptions = useMemo((): string[] => {
+    const uniqueMuscles = new Set<string>();
+    
     exercises.forEach(exercise => {
-      uniqueMuscles.add(exercise.muscle_group_primary);
+      // Split primary muscle group by comma and add each individual muscle
+      if (exercise.muscle_group_primary) {
+        exercise.muscle_group_primary.split(',').forEach(muscle => {
+          const trimmedMuscle = muscle.trim();
+          if (trimmedMuscle) {
+            uniqueMuscles.add(trimmedMuscle);
+          }
+        });
+      }
+      
+      // Split secondary muscle group by comma and add each individual muscle
       if (exercise.muscle_group_secondary) {
-        uniqueMuscles.add(exercise.muscle_group_secondary);
+        exercise.muscle_group_secondary.split(',').forEach(muscle => {
+          const trimmedMuscle = muscle.trim();
+          if (trimmedMuscle) {
+            uniqueMuscles.add(trimmedMuscle);
+          }
+        });
       }
     });
-    return Array.from(uniqueMuscles).sort();
+    
+    // Sort alphabetically, then prepend "All Muscles" at the top
+    const sortedMuscles = Array.from(uniqueMuscles).sort();
+    return ['All Muscles', ...sortedMuscles];
   }, [exercises]);
 
   useEffect(() => {
@@ -88,10 +107,10 @@ export default function ExerciseSelectionScreen({
       const matchesEquipment = selectedEquipment === 'All Equipment' || 
         exercise.equipment.toLowerCase() === selectedEquipment.toLowerCase();
       
-      // Muscle group filter
+      // Muscle group filter - check if selected muscle is included in either primary or secondary
       const matchesMuscleGroup = selectedMuscleGroup === 'All Muscles' ||
-        exercise.muscle_group_primary === selectedMuscleGroup ||
-        exercise.muscle_group_secondary === selectedMuscleGroup;
+        (exercise.muscle_group_primary && exercise.muscle_group_primary.includes(selectedMuscleGroup)) ||
+        (exercise.muscle_group_secondary && exercise.muscle_group_secondary.includes(selectedMuscleGroup));
       
       return matchesSearch && matchesEquipment && matchesMuscleGroup;
     });
@@ -116,26 +135,36 @@ export default function ExerciseSelectionScreen({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>{title}</Text>
-          {options.map((option) => (
-            <TouchableOpacity
-              key={option}
-              style={[
-                styles.modalOption,
-                selectedValue === option && styles.modalOptionSelected
-              ]}
-              onPress={() => {
-                onSelect(option);
-                onClose();
-              }}
-            >
-              <Text style={[
-                styles.modalOptionText,
-                selectedValue === option && styles.modalOptionTextSelected
-              ]}>
-                {option}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <FlatList
+            data={options}
+            keyExtractor={(item) => item}
+            style={styles.modalList}
+            showsVerticalScrollIndicator={true}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.modalOption,
+                  selectedValue === item && styles.modalOptionSelected
+                ]}
+                onPress={() => {
+                  onSelect(item);
+                  onClose();
+                }}
+              >
+                <Text 
+                  style={[
+                    styles.modalOptionText,
+                    selectedValue === item && styles.modalOptionTextSelected
+                  ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
           <TouchableOpacity style={styles.modalCancel} onPress={onClose}>
             <Text style={styles.modalCancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -395,6 +424,7 @@ const createStyles = (theme: any) =>
       maxHeight: '70%',
       borderWidth: 1,
       borderColor: theme.borderLight,
+      flexDirection: 'column',
     },
     modalTitle: {
       fontSize: 18,
@@ -402,6 +432,11 @@ const createStyles = (theme: any) =>
       color: theme.text,
       textAlign: 'center',
       marginBottom: 16,
+      flexShrink: 0,
+    },
+    modalList: {
+      flexGrow: 1,
+      flexShrink: 1,
     },
     modalOption: {
       paddingVertical: 12,
@@ -415,6 +450,7 @@ const createStyles = (theme: any) =>
     modalOptionText: {
       fontSize: 16,
       color: theme.text,
+      flexShrink: 1,
     },
     modalOptionTextSelected: {
       color: 'white',
@@ -427,6 +463,7 @@ const createStyles = (theme: any) =>
       paddingHorizontal: 16,
       marginTop: 12,
       alignItems: 'center',
+      flexShrink: 0,
     },
     modalCancelText: {
       color: theme.textSecondary,
