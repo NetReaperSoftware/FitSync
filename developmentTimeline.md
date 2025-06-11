@@ -80,5 +80,10 @@ Originally, must allow:
 # Step 4: Implement DB tracking for workout data
 When completing an active workout, be it from a routine or from a new workout, the database needs to be updated to hold the users workout information, including the exercises completed, their sets, reps, and weight values.
 
+# Notes
+- Default Exercises data for sets, weigt, and reps is untracked, fix to where users can duplicate for their own routines
+- Maybe have a default section for users to chose an import 
+- ScrollView is very buggy throughout Workout Sceen, sometimes scrolls, sometimes doesnt
+
 # 4a
 Implement ...
