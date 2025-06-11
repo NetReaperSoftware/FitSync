@@ -19,11 +19,15 @@ type Routine = {
   name: string;
   exercises: Exercise[];
   folderId?: string;
+  isDefault?: boolean;
+  isUserOwned?: boolean;
 };
 
 type Folder = {
   id: string;
   name: string;
+  isDefault?: boolean;
+  isUserOwned?: boolean;
 };
 
 interface RoutinesListProps {
@@ -44,6 +48,7 @@ interface RoutinesListProps {
   onDeleteRoutine: (routineId: string) => void;
   onStartNewRoutineInFolder: (folderId: string) => void;
   onRenameRoutine: (routineId: string, currentName: string) => void;
+  onBackgroundPress: () => void;
 }
 
 export default function RoutinesList({
@@ -63,24 +68,25 @@ export default function RoutinesList({
   onEditRoutine,
   onDeleteRoutine,
   onStartNewRoutineInFolder,
-  onRenameRoutine
+  onRenameRoutine,
+  onBackgroundPress
 }: RoutinesListProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
   // Helper function to check if a folder is a default folder
-  const isDefaultFolder = (folderName: string) => {
-    return folderName === 'Default Routines';
+  const isDefaultFolder = (folder: Folder) => {
+    return folder.isDefault === true;
   };
 
-  // Helper function to check if a folder is "My Routines"
+  // Helper function to check if a folder is "My Routines" 
   const isMyRoutinesFolder = (folderName: string) => {
     return folderName === 'My Routines';
   };
 
   // Helper function to check if a routine is a default routine
-  const isDefaultRoutine = (routine: any) => {
-    return routine.is_default === true;
+  const isDefaultRoutine = (routine: Routine) => {
+    return routine.isDefault === true;
   };
 
   return (
@@ -106,7 +112,7 @@ export default function RoutinesList({
       {folders.map(folder => {
         const isCollapsed = collapsedFolders.has(folder.id);
         const folderRoutines = routines.filter(routine => routine.folderId === folder.id);
-        const isDefault = isDefaultFolder(folder.name);
+        const isDefault = isDefaultFolder(folder);
         const isMyRoutines = isMyRoutinesFolder(folder.name);
         
         return (
@@ -120,7 +126,12 @@ export default function RoutinesList({
                 <Text style={styles.folderToggleIcon}>
                   {isCollapsed ? '▶' : '▼'}
                 </Text>
-                <Text style={styles.folderName}>{folder.name}</Text>
+                <View style={styles.folderNameContainer}>
+                  <Text style={styles.folderName}>{folder.name}</Text>
+                  {isDefault && (
+                    <Text style={styles.defaultLabel}>Default</Text>
+                  )}
+                </View>
               </TouchableOpacity>
               
               {/* Only show hamburger button for non-default folders */}
@@ -173,7 +184,12 @@ export default function RoutinesList({
                   style={styles.routineMainContent}
                   onPress={() => onEditRoutine(routine)}
                 >
-                  <Text style={styles.routineName}>{routine.name}</Text>
+                  <View style={styles.routineNameContainer}>
+                    <Text style={styles.routineName}>{routine.name}</Text>
+                    {isDefaultRoutine(routine) && (
+                      <Text style={styles.defaultLabel}>Default</Text>
+                    )}
+                  </View>
                   <Text style={styles.routineExerciseCount}>
                     {routine.exercises.length} exercises
                   </Text>
@@ -187,8 +203,8 @@ export default function RoutinesList({
                     <Text style={styles.startRoutineButtonText}>Start Routine</Text>
                   </TouchableOpacity>
                   
-                  {/* Only show hamburger button for non-default routines and not in Default Routines folder */}
-                  {!isDefault && !isDefaultRoutine(routine) && (
+                  {/* Only show hamburger button for user-owned routines */}
+                  {!isDefaultRoutine(routine) && (
                     <TouchableOpacity
                       style={styles.routineOptionsButton}
                       onPress={() => onSetRoutineOptionsVisible(
@@ -238,7 +254,12 @@ export default function RoutinesList({
               style={styles.routineMainContent}
               onPress={() => onEditRoutine(routine)}
             >
-              <Text style={styles.routineName}>{routine.name}</Text>
+              <View style={styles.routineNameContainer}>
+                <Text style={styles.routineName}>{routine.name}</Text>
+                {isDefaultRoutine(routine) && (
+                  <Text style={styles.defaultLabel}>Default</Text>
+                )}
+              </View>
               <Text style={styles.routineExerciseCount}>
                 {routine.exercises.length} exercises
               </Text>
@@ -483,5 +504,24 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginVertical: 4,
     borderWidth: 1,
     borderColor: theme.borderLight,
+  },
+  folderNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  routineNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  defaultLabel: {
+    backgroundColor: theme.border,
+    color: theme.textSecondary,
+    fontSize: 10,
+    fontWeight: '600',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+    textTransform: 'uppercase',
   },
 });

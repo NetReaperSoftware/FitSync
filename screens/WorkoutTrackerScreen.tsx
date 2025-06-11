@@ -47,11 +47,15 @@ type Routine = {
   name: string;
   exercises: Exercise[];
   folderId?: string;
+  isDefault?: boolean;
+  isUserOwned?: boolean;
 };
 
 type Folder = {
   id: string;
   name: string;
+  isDefault?: boolean;
+  isUserOwned?: boolean;
 };
 
 export default function WorkoutTrackerScreen(): React.JSX.Element {
@@ -79,6 +83,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   const [routineOptionsVisible, setRoutineOptionsVisible] = useState<string | null>(null);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [replacingExerciseIndex, setReplacingExerciseIndex] = useState<number | null>(null);
+  const [isCreatingCopy, setIsCreatingCopy] = useState<boolean>(false);
 
   const styles = createStyles(theme);
 
@@ -111,11 +116,15 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
 
   const fetchFolders = async () => {
     try {
+      const user = await supabase.auth.getUser();
+      const userId = user.data.user?.id;
+
+      // Fetch both default folders and user-created folders
       const { data: foldersData, error: foldersError } = await supabase
         .schema('fitness')
         .from('workout_routine_folders')
-        .select('id, name, description, is_default')
-        .eq('is_default', true)
+        .select('id, name, description, is_default, created_by')
+        .or(`is_default.eq.true,created_by.eq.${userId}`)
         .order('name');
 
       if (foldersError) {
@@ -131,7 +140,9 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       // Convert database folders to app format
       const convertedFolders: Folder[] = foldersData.map((dbFolder: any) => ({
         id: dbFolder.id,
-        name: dbFolder.name
+        name: dbFolder.name,
+        isDefault: dbFolder.is_default,
+        isUserOwned: dbFolder.created_by === userId
       }));
 
       setFolders(convertedFolders);
@@ -181,6 +192,9 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       }
 
       // Convert database routines to app format
+      const user = await supabase.auth.getUser();
+      const userId = user.data.user?.id;
+      
       const convertedRoutines: Routine[] = routinesData.map((dbRoutine: any) => {
         // Group routine exercises by exercise_id to reconstruct sets
         const exerciseGroups = new Map();
@@ -214,7 +228,9 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           exercises: Array.from(exerciseGroups.values())
             .sort((a, b) => a.order - b.order)
             .map(({ order, ...exercise }) => exercise), // Remove order field
-          folderId: dbRoutine.folder_id
+          folderId: dbRoutine.folder_id,
+          isDefault: dbRoutine.is_default,
+          isUserOwned: dbRoutine.created_by === userId
         };
       });
 
@@ -625,7 +641,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           exercises: currentRoutineExercises,
           folderId: newRoutineData.folder_id,
         };
-        setRoutines([...routines, newRoutine]);
+        addRoutineToState(newRoutine);
       }
       
       setRoutineCreationVisible(false);
@@ -650,14 +666,25 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     
     // If editing a default routine, create a user copy first
     if (isDefaultRoutine(routine)) {
-      const userCopy = await createUserRoutineFromDefault(routine);
-      if (userCopy) {
-        // Add to local state and refresh routines
-        setRoutines(prevRoutines => [...prevRoutines, userCopy]);
-        routineToEdit = userCopy;
-      } else {
-        console.error('Failed to create user copy of default routine');
+      // Prevent multiple simultaneous copy operations
+      if (isCreatingCopy) {
+        console.log('Copy operation already in progress');
         return;
+      }
+      
+      setIsCreatingCopy(true);
+      try {
+        const userCopy = await createUserRoutineFromDefault(routine);
+        if (userCopy) {
+          // Add to local state and refresh routines
+          addRoutineToState(userCopy);
+          routineToEdit = userCopy;
+        } else {
+          console.error('Failed to create user copy of default routine');
+          return;
+        }
+      } finally {
+        setIsCreatingCopy(false);
       }
     }
     
@@ -670,8 +697,21 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   };
 
   const deleteRoutine = async (routineId: string) => {
+    console.log('Attempting to delete routine:', routineId);
+    
     const routine = routines.find(r => r.id === routineId);
-    if (!routine) return;
+    if (!routine) {
+      console.error('Routine not found in local state:', routineId);
+      return;
+    }
+
+    console.log('Routine details:', {
+      id: routine.id,
+      name: routine.name,
+      isDefault: routine.isDefault,
+      isUserOwned: routine.isUserOwned,
+      folderId: routine.folderId
+    });
 
     if (isDefaultRoutine(routine)) {
       // For default routines, we can't actually delete them from the database
@@ -681,37 +721,105 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       return;
     }
 
+    if (!routine.isUserOwned) {
+      console.error('Cannot delete routine: user does not own this routine');
+      throw new Error('You can only delete routines that you created.');
+    }
+
     // For user-created routines, delete from database
     try {
+      console.log('Starting deletion process for user-created routine');
+      
+      // First verify the routine exists in the database and user owns it
+      const { data: routineCheck, error: checkError } = await supabase
+        .schema('fitness')
+        .from('workout_routines')
+        .select('id, name, created_by')
+        .eq('id', routineId)
+        .single();
+      
+      if (checkError) {
+        console.error('Error checking routine existence:', checkError);
+        throw new Error('Routine not found in database.');
+      }
+      
+      if (!routineCheck) {
+        throw new Error('Routine not found in database.');
+      }
+      
+      const user = await supabase.auth.getUser();
+      if (routineCheck.created_by !== user.data.user?.id) {
+        throw new Error('You can only delete routines that you created.');
+      }
+      
+      console.log('Routine verification passed, proceeding with deletion');
+      
       // First delete the routine exercises
-      const { error: exercisesError } = await supabase
+      console.log('Deleting routine exercises...');
+      const { error: exercisesError, count: exercisesDeleted } = await supabase
         .schema('fitness')
         .from('workout_routine_exercises')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('routine_id', routineId);
 
       if (exercisesError) {
-        console.error('Error deleting routine exercises:', exercisesError);
-        return;
+        console.error('Error deleting routine exercises:', {
+          error: exercisesError,
+          code: exercisesError.code,
+          message: exercisesError.message,
+          details: exercisesError.details,
+          hint: exercisesError.hint
+        });
+        
+        // Provide more specific error messages based on error codes
+        if (exercisesError.code === '23503') {
+          throw new Error('Cannot delete routine: foreign key constraint violation.');
+        } else if (exercisesError.code === '42501') {
+          throw new Error('Permission denied: you do not have permission to delete this routine.');
+        } else {
+          throw new Error(`Database error: ${exercisesError.message}`);
+        }
       }
 
+      console.log(`Successfully deleted ${exercisesDeleted} routine exercises`);
+
       // Then delete the routine itself
-      const { error: routineError } = await supabase
+      console.log('Deleting routine...');
+      const { error: routineError, count: routinesDeleted } = await supabase
         .schema('fitness')
         .from('workout_routines')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('id', routineId);
 
       if (routineError) {
-        console.error('Error deleting routine:', routineError);
-        return;
+        console.error('Error deleting routine:', {
+          error: routineError,
+          code: routineError.code,
+          message: routineError.message,
+          details: routineError.details,
+          hint: routineError.hint
+        });
+        
+        // Provide more specific error messages based on error codes
+        if (routineError.code === '23503') {
+          throw new Error('Cannot delete routine: it is still referenced by other data.');
+        } else if (routineError.code === '42501') {
+          throw new Error('Permission denied: you do not have permission to delete this routine.');
+        } else {
+          throw new Error(`Database error: ${routineError.message}`);
+        }
       }
+
+      console.log(`Successfully deleted ${routinesDeleted} routine(s)`);
 
       // Remove from local state
       setRoutines(routines.filter(routine => routine.id !== routineId));
-      console.log('Successfully deleted routine');
+      console.log('Successfully removed routine from local state');
+      
     } catch (error) {
       console.error('Unexpected error deleting routine:', error);
+      // You might want to show an error alert to the user here
+      throw error; // Re-throw to let the UI handle the error
     }
 
     setRoutineOptionsVisible(null);
@@ -766,24 +874,93 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     setCollapsedFolders(newCollapsed);
   };
 
-  const deleteFolder = (folderId: string) => {
-    setRoutines(routines.map(routine => 
-      routine.folderId === folderId 
-        ? { ...routine, folderId: undefined }
-        : routine
-    ));
+  const deleteFolder = async (folderId: string) => {
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) return;
+
+    if (isDefaultFolder(folder)) {
+      // Cannot delete default folders
+      console.log('Cannot delete default folders');
+      setFolderOptionsVisible(null);
+      return;
+    }
+
+    try {
+      // Move all routines in this folder to no folder
+      const routinesInFolder = routines.filter(r => r.folderId === folderId);
+      for (const routine of routinesInFolder) {
+        await supabase
+          .schema('fitness')
+          .from('workout_routines')
+          .update({ folder_id: null })
+          .eq('id', routine.id);
+      }
+
+      // Delete the folder from database
+      const { error: folderError } = await supabase
+        .schema('fitness')
+        .from('workout_routine_folders')
+        .delete()
+        .eq('id', folderId);
+
+      if (folderError) {
+        console.error('Error deleting folder:', folderError);
+        return;
+      }
+
+      // Update local state
+      setRoutines(routines.map(routine => 
+        routine.folderId === folderId 
+          ? { ...routine, folderId: undefined }
+          : routine
+      ));
+      
+      setFolders(folders.filter(folder => folder.id !== folderId));
+      console.log('Successfully deleted folder');
+    } catch (error) {
+      console.error('Unexpected error deleting folder:', error);
+    }
+
+    setFolderOptionsVisible(null);
+  };
+
+  const startRenamingFolder = async (folderId: string, currentName: string) => {
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) return;
+
+    // Prevent renaming default folders
+    if (isDefaultFolder(folder)) {
+      console.log('Cannot rename default folders');
+      // TODO: Show user-friendly message that default folders cannot be renamed
+      alert('Default folders cannot be renamed.');
+      setFolderOptionsVisible(null);
+      return;
+    }
     
-    setFolders(folders.filter(folder => folder.id !== folderId));
+    // For user-owned folders, implement renaming logic here if needed
+    // TODO: Implement folder renaming UI and logic
+    console.log('Folder renaming not yet implemented for user folders');
     setFolderOptionsVisible(null);
   };
 
-  const startRenamingFolder = (_folderId: string, _currentName: string) => {
-    // TODO: Implement folder renaming
-    setFolderOptionsVisible(null);
-  };
-
-  const startNewRoutineInFolder = (folderId: string) => {
-    setSelectedFolder(folderId);
+  const startNewRoutineInFolder = async (folderId: string) => {
+    const folder = folders.find(f => f.id === folderId);
+    let targetFolderId = folderId;
+    
+    // If trying to create a routine in a default folder, redirect to "My Routines" instead
+    if (folder && isDefaultFolder(folder)) {
+      const myRoutinesFolder = folders.find(f => f.name === 'My Routines');
+      if (myRoutinesFolder) {
+        targetFolderId = myRoutinesFolder.id;
+        console.log('Redirecting new routine creation from default folder to My Routines');
+      } else {
+        // If "My Routines" folder doesn't exist, create routine without folder
+        targetFolderId = '';
+        console.log('My Routines folder not found, creating routine without folder');
+      }
+    }
+    
+    setSelectedFolder(targetFolderId);
     startNewRoutine();
     setFolderOptionsVisible(null);
   };
@@ -887,8 +1064,26 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
 
   // Utility function to check if a routine is a default routine (not created by user)
   const isDefaultRoutine = (routine: Routine) => {
-    // Check if routine has is_default property or lacks created_by field indicating it's a default
-    return (routine as any).is_default === true;
+    return routine.isDefault === true;
+  };
+
+  // Utility function to check if a folder is a default folder (not created by user)
+  const isDefaultFolder = (folder: Folder) => {
+    return folder.isDefault === true;
+  };
+
+  // Helper function to safely add a routine to state without duplicates
+  const addRoutineToState = (newRoutine: Routine) => {
+    setRoutines(prevRoutines => {
+      // Check if routine already exists in state
+      const existingRoutine = prevRoutines.find(r => r.id === newRoutine.id);
+      if (existingRoutine) {
+        console.log('Routine already exists in state, not adding duplicate:', newRoutine.id);
+        return prevRoutines;
+      }
+      console.log('Adding new routine to state:', newRoutine.id, newRoutine.name);
+      return [...prevRoutines, newRoutine];
+    });
   };
 
   // Create a user routine in the database based on a default routine
@@ -900,16 +1095,67 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         return null;
       }
 
+      // Check if user already has a copy of this routine
+      const routineCopyName = defaultRoutine.name + ' (My Copy)';
+      
+      console.log('Checking for existing routine copy:', {
+        routineCopyName,
+        currentRoutines: routines.map(r => ({ name: r.name, isUserOwned: r.isUserOwned }))
+      });
+      
+      const existingCopy = routines.find(r => 
+        r.name === routineCopyName && r.isUserOwned
+      );
+      
+      if (existingCopy) {
+        console.log('User already has a copy of this routine, returning existing copy:', existingCopy.id);
+        return existingCopy;
+      }
+      
+      // Always place copied routines in "My Routines" folder
+      let targetFolderId: string | undefined = undefined;
+      const myRoutinesFolder = folders.find(f => f.name === 'My Routines');
+      if (myRoutinesFolder) {
+        targetFolderId = myRoutinesFolder.id;
+        console.log('Placing routine copy in My Routines folder:', myRoutinesFolder.id);
+      } else {
+        console.log('My Routines folder not found, routine will be placed without a folder');
+      }
+
+      // Also check the database for existing copies (in case local state is out of sync)
+      const { data: existingDbCopies } = await supabase
+        .schema('fitness')
+        .from('workout_routines')
+        .select('id, name, folder_id')
+        .eq('name', routineCopyName)
+        .eq('created_by', user.data.user.id);
+        
+      if (existingDbCopies && existingDbCopies.length > 0) {
+        console.log('Found existing database copy, preventing duplicate creation');
+        // Return the first existing copy (convert to our format)
+        const dbCopy = existingDbCopies[0];
+        return {
+          id: dbCopy.id,
+          name: dbCopy.name,
+          exercises: defaultRoutine.exercises,
+          folderId: dbCopy.folder_id,
+          isDefault: false,
+          isUserOwned: true
+        };
+      }
+      
+      console.log('No existing copy found in database, proceeding to create new copy');
+
       // Create the user routine
       const { data: newRoutineData, error: routineError } = await supabase
         .schema('fitness')
         .from('workout_routines')
         .insert({
-          name: defaultRoutine.name + ' (Modified)',
-          description: `Modified version of ${defaultRoutine.name}`,
+          name: defaultRoutine.name + ' (My Copy)',
+          description: `User copy of ${defaultRoutine.name}`,
           is_default: false,
           created_by: user.data.user.id,
-          folder_id: defaultRoutine.folderId
+          folder_id: targetFolderId
         })
         .select()
         .single();
@@ -964,7 +1210,9 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         id: newRoutineData.id,
         name: newRoutineData.name,
         exercises: defaultRoutine.exercises,
-        folderId: newRoutineData.folder_id
+        folderId: newRoutineData.folder_id,
+        isDefault: false,
+        isUserOwned: true
       };
 
       return newRoutine;
@@ -985,54 +1233,65 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <TouchableWithoutFeedback onPress={handleBackgroundPress}>
-        <View style={styles.container}>
-          <ScrollView style={styles.scrollView}>
-            <View style={styles.content}>
-              <Text style={styles.header}>Workouts</Text>
-              
-              {/* Minimized Active Workout Indicator */}
-              {isWorkoutMinimized && (
-                <TouchableOpacity
-                  style={styles.minimizedWorkoutBar}
-                  onPress={restoreWorkout}
-                >
-                  <Text style={styles.minimizedWorkoutText}>
-                    Active Workout in Progress - Tap to Resume
-                  </Text>
-                </TouchableOpacity>
-              )}
-              
-              {/* New Workout Button */}
+      <View style={styles.container}>
+        <ScrollView 
+          style={styles.scrollView}
+          onScrollBeginDrag={handleBackgroundPress}
+        >
+          <View style={styles.content}>
+            <Text style={styles.header}>Workouts</Text>
+            
+            {/* Minimized Active Workout Indicator */}
+            {isWorkoutMinimized && (
               <TouchableOpacity
-                style={styles.newWorkoutButton}
-                onPress={startNewWorkout}
+                style={styles.minimizedWorkoutBar}
+                onPress={restoreWorkout}
               >
-                <Text style={styles.newWorkoutButtonText}>New Workout</Text>
+                <Text style={styles.minimizedWorkoutText}>
+                  Active Workout in Progress - Tap to Resume
+                </Text>
               </TouchableOpacity>
-              
-              {/* Routines Section */}
-              <RoutinesList
-                routines={routines}
-                folders={folders}
-                collapsedFolders={collapsedFolders}
-                folderOptionsVisible={folderOptionsVisible}
-                routineOptionsVisible={routineOptionsVisible}
-                onCreateFolder={() => setFolderCreationVisible(true)}
-                onStartNewRoutine={startNewRoutine}
-                onToggleFolderCollapse={toggleFolderCollapse}
-                onSetFolderOptionsVisible={setFolderOptionsVisible}
-                onSetRoutineOptionsVisible={setRoutineOptionsVisible}
-                onStartRenamingFolder={startRenamingFolder}
-                onDeleteFolder={deleteFolder}
-                onStartRoutineFromTemplate={startRoutineFromTemplate}
-                onEditRoutine={editRoutine}
-                onDeleteRoutine={deleteRoutine}
-                onStartNewRoutineInFolder={startNewRoutineInFolder}
-                onRenameRoutine={startRenamingRoutine}
-              />
-            </View>
-          </ScrollView>
+            )}
+            
+            {/* New Workout Button */}
+            <TouchableOpacity
+              style={styles.newWorkoutButton}
+              onPress={startNewWorkout}
+            >
+              <Text style={styles.newWorkoutButtonText}>New Workout</Text>
+            </TouchableOpacity>
+            
+            {/* Routines Section */}
+            <RoutinesList
+              routines={routines}
+              folders={folders}
+              collapsedFolders={collapsedFolders}
+              folderOptionsVisible={folderOptionsVisible}
+              routineOptionsVisible={routineOptionsVisible}
+              onCreateFolder={() => setFolderCreationVisible(true)}
+              onStartNewRoutine={startNewRoutine}
+              onToggleFolderCollapse={toggleFolderCollapse}
+              onSetFolderOptionsVisible={setFolderOptionsVisible}
+              onSetRoutineOptionsVisible={setRoutineOptionsVisible}
+              onStartRenamingFolder={startRenamingFolder}
+              onDeleteFolder={deleteFolder}
+              onStartRoutineFromTemplate={startRoutineFromTemplate}
+              onEditRoutine={editRoutine}
+              onDeleteRoutine={async (routineId: string) => {
+                try {
+                  await deleteRoutine(routineId);
+                } catch (error) {
+                  console.error('Failed to delete routine:', error);
+                  // TODO: Show user-friendly error message
+                  alert('Failed to delete routine. Please try again.');
+                }
+              }}
+              onStartNewRoutineInFolder={startNewRoutineInFolder}
+              onRenameRoutine={startRenamingRoutine}
+              onBackgroundPress={handleBackgroundPress}
+            />
+          </View>
+        </ScrollView>
         
         <ActiveWorkoutModal
           visible={activeWorkoutVisible}
@@ -1085,8 +1344,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           onCancel={cancelRoutineRename}
         />
 
-        </View>
-      </TouchableWithoutFeedback>
+      </View>
     </SafeAreaView>
   );
 }
