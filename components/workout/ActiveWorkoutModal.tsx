@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,10 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  SafeAreaView
+  SafeAreaView,
+  Animated,
+  PanResponder,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -54,6 +57,7 @@ export default function ActiveWorkoutModal({
 }: ActiveWorkoutModalProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
+  const [swipedRows, setSwipedRows] = useState<Set<string>>(new Set());
 
   const getWorkoutStats = () => {
     const totalSets = exercises.reduce((total, exercise) => total + exercise.sets.length, 0);
@@ -67,6 +71,172 @@ export default function ActiveWorkoutModal({
 
   const stats = getWorkoutStats();
 
+  const handleBackgroundPress = () => {
+    // Clear all swiped rows
+    setSwipedRows(new Set());
+  };
+
+  // SwipeableSetRow Component for Active Workout
+  const SwipeableSetRow = ({ exercise, set, setIndex }: {
+    exercise: Exercise;
+    set: ExerciseSet;
+    setIndex: number;
+  }) => {
+    const translateX = React.useRef(new Animated.Value(0)).current;
+    const deleteOpacity = React.useRef(new Animated.Value(0)).current;
+    const rowId = `${exercise.id}-${setIndex}`;
+    const isSwipedOpen = swipedRows.has(rowId);
+    const [isSwiping, setIsSwiping] = useState(false);
+
+    const panResponder = PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderGrant: () => {
+        setIsSwiping(true);
+        // Show delete button when swipe starts
+        Animated.timing(deleteOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0) { // Only allow left swipe
+          translateX.setValue(Math.max(gestureState.dx, -80));
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        setIsSwiping(false);
+        if (gestureState.dx < -40) {
+          // Swipe left - show delete button
+          Animated.spring(translateX, {
+            toValue: -80,
+            useNativeDriver: true,
+          }).start();
+          setSwipedRows(prev => new Set([...prev, rowId]));
+          // Keep delete button visible
+          Animated.timing(deleteOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        } else {
+          // Snap back and hide delete button
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+          Animated.timing(deleteOpacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+          setSwipedRows(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(rowId);
+            return newSet;
+          });
+        }
+      },
+    });
+
+    // Function to close swipe from outside
+    React.useEffect(() => {
+      if (!swipedRows.has(rowId) && isSwipedOpen) {
+        // Row was closed externally, animate back
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+        Animated.timing(deleteOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    }, [swipedRows, rowId, isSwipedOpen]);
+
+    const handleDelete = () => {
+      onRemoveSet(exercise.id, set.id);
+    };
+
+    const handleTap = () => {
+      if (isSwipedOpen) {
+        // Close if swiped open
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+        Animated.timing(deleteOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+        setSwipedRows(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(rowId);
+          return newSet;
+        });
+      }
+    };
+
+    return (
+      <View style={styles.swipeableContainer}>
+        <Animated.View style={[
+          styles.deleteButtonContainer,
+          { opacity: deleteOpacity }
+        ]}>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDelete}
+          >
+            <Text style={styles.deleteButtonText}>Delete</Text>
+          </TouchableOpacity>
+        </Animated.View>
+        
+        <Animated.View
+          style={[
+            styles.setRow,
+            { transform: [{ translateX }] }
+          ]}
+          {...panResponder.panHandlers}
+        >
+          <TouchableWithoutFeedback onPress={handleTap}>
+            <View style={styles.setRowContent}>
+              <Text style={styles.setText}>{setIndex + 1}</Text>
+              <TextInput
+                style={styles.setInput}
+                value={set.weight.toString()}
+                placeholder="0"
+                keyboardType="numeric"
+                onChangeText={(text) => onUpdateSet(exercise.id, set.id, 'weight', parseFloat(text) || 0)}
+              />
+              <TextInput
+                style={styles.setInput}
+                value={set.reps.toString()}
+                placeholder="0"
+                keyboardType="numeric"
+                onChangeText={(text) => onUpdateSet(exercise.id, set.id, 'reps', parseInt(text) || 0)}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.completionButton,
+                  set.completed ? styles.completedButton : styles.pendingButton,
+                ]}
+                onPress={() => onToggleSetCompletion(exercise.id, set.id)}
+              >
+                <Text style={styles.completionButtonText}>
+                  {set.completed ? '✓' : ''}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </Animated.View>
+      </View>
+    );
+  };
+
   return (
     <Modal
       animationType="slide"
@@ -75,7 +245,8 @@ export default function ActiveWorkoutModal({
       onRequestClose={onMinimize}
     >
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
+        <TouchableWithoutFeedback onPress={handleBackgroundPress}>
+          <View style={styles.container}>
           {/* Active Workout Header */}
           <View style={styles.activeWorkoutHeader}>
             <TouchableOpacity
@@ -128,42 +299,12 @@ export default function ActiveWorkoutModal({
                   </View>
                   
                   {exercise.sets.map((set, index) => (
-                    <View key={set.id} style={styles.setRow}>
-                      <Text style={styles.setText}>{index + 1}</Text>
-                      <TextInput
-                        style={styles.setInput}
-                        value={set.weight.toString()}
-                        placeholder="0"
-                        keyboardType="numeric"
-                        onChangeText={(text) => onUpdateSet(exercise.id, set.id, 'weight', parseFloat(text) || 0)}
-                      />
-                      <TextInput
-                        style={styles.setInput}
-                        value={set.reps.toString()}
-                        placeholder="0"
-                        keyboardType="numeric"
-                        onChangeText={(text) => onUpdateSet(exercise.id, set.id, 'reps', parseInt(text) || 0)}
-                      />
-                      <TouchableOpacity
-                        style={[
-                          styles.completionButton,
-                          set.completed ? styles.completedButton : styles.pendingButton,
-                        ]}
-                        onPress={() => onToggleSetCompletion(exercise.id, set.id)}
-                      >
-                        <Text style={styles.completionButtonText}>
-                          {set.completed ? '✓' : ''}
-                        </Text>
-                      </TouchableOpacity>
-                      {exercise.sets.length > 1 && (
-                        <TouchableOpacity
-                          style={styles.removeSetButton}
-                          onPress={() => onRemoveSet(exercise.id, set.id)}
-                        >
-                          <Text style={styles.removeSetButtonText}>−</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                    <SwipeableSetRow
+                      key={set.id}
+                      exercise={exercise}
+                      set={set}
+                      setIndex={index}
+                    />
                   ))}
                   
                   <TouchableOpacity
@@ -192,7 +333,8 @@ export default function ActiveWorkoutModal({
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </View>
+          </View>
+        </TouchableWithoutFeedback>
       </SafeAreaView>
     </Modal>
   );
@@ -404,5 +546,37 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  swipeableContainer: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  deleteButtonContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.error || '#FF3B30',
+  },
+  deleteButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  setRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    backgroundColor: theme.cardBackground,
   },
 });

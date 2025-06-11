@@ -68,6 +68,21 @@ export default function RoutinesList({
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
+  // Helper function to check if a folder is a default folder
+  const isDefaultFolder = (folderName: string) => {
+    return folderName === 'Default Routines';
+  };
+
+  // Helper function to check if a folder is "My Routines"
+  const isMyRoutinesFolder = (folderName: string) => {
+    return folderName === 'My Routines';
+  };
+
+  // Helper function to check if a routine is a default routine
+  const isDefaultRoutine = (routine: any) => {
+    return routine.is_default === true;
+  };
+
   return (
     <View style={styles.routinesSection}>
       <View style={styles.routinesSectionHeader}>
@@ -91,6 +106,8 @@ export default function RoutinesList({
       {folders.map(folder => {
         const isCollapsed = collapsedFolders.has(folder.id);
         const folderRoutines = routines.filter(routine => routine.folderId === folder.id);
+        const isDefault = isDefaultFolder(folder.name);
+        const isMyRoutines = isMyRoutinesFolder(folder.name);
         
         return (
           <View key={folder.id} style={styles.folderContainer}>
@@ -106,31 +123,40 @@ export default function RoutinesList({
                 <Text style={styles.folderName}>{folder.name}</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity
-                style={styles.optionsButton}
-                onPress={() => onSetFolderOptionsVisible(
-                  folderOptionsVisible === folder.id ? null : folder.id
-                )}
-              >
-                <Text style={styles.optionsButtonText}>⋯</Text>
-              </TouchableOpacity>
+              {/* Only show hamburger button for non-default folders */}
+              {!isDefault && (
+                <TouchableOpacity
+                  style={styles.optionsButton}
+                  onPress={() => onSetFolderOptionsVisible(
+                    folderOptionsVisible === folder.id ? null : folder.id
+                  )}
+                >
+                  <Text style={styles.optionsButtonText}>⋯</Text>
+                </TouchableOpacity>
+              )}
             </View>
             
             {/* Folder Options Menu */}
             {folderOptionsVisible === folder.id && (
               <View style={styles.optionsMenu}>
-                <TouchableOpacity
-                  style={styles.optionItem}
-                  onPress={() => onStartRenamingFolder(folder.id, folder.name)}
-                >
-                  <Text style={styles.optionText}>Rename Folder</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.optionItem}
-                  onPress={() => onDeleteFolder(folder.id)}
-                >
-                  <Text style={[styles.optionText, styles.deleteOptionText]}>Delete Folder</Text>
-                </TouchableOpacity>
+                {/* Show rename option only for non-My Routines folders */}
+                {!isMyRoutines && (
+                  <TouchableOpacity
+                    style={styles.optionItem}
+                    onPress={() => onStartRenamingFolder(folder.id, folder.name)}
+                  >
+                    <Text style={styles.optionText}>Rename Folder</Text>
+                  </TouchableOpacity>
+                )}
+                {/* Show delete option only for non-My Routines folders */}
+                {!isMyRoutines && (
+                  <TouchableOpacity
+                    style={styles.optionItem}
+                    onPress={() => onDeleteFolder(folder.id)}
+                  >
+                    <Text style={[styles.optionText, styles.deleteOptionText]}>Delete Folder</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.optionItem}
                   onPress={() => onStartNewRoutineInFolder(folder.id)}
@@ -161,14 +187,17 @@ export default function RoutinesList({
                     <Text style={styles.startRoutineButtonText}>Start Routine</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity
-                    style={styles.routineOptionsButton}
-                    onPress={() => onSetRoutineOptionsVisible(
-                      routineOptionsVisible === routine.id ? null : routine.id
-                    )}
-                  >
-                    <Text style={styles.optionsButtonText}>⋯</Text>
-                  </TouchableOpacity>
+                  {/* Only show hamburger button for non-default routines and not in Default Routines folder */}
+                  {!isDefault && !isDefaultRoutine(routine) && (
+                    <TouchableOpacity
+                      style={styles.routineOptionsButton}
+                      onPress={() => onSetRoutineOptionsVisible(
+                        routineOptionsVisible === routine.id ? null : routine.id
+                      )}
+                    >
+                      <Text style={styles.optionsButtonText}>⋯</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 
                 {/* Routine Options Menu */}
@@ -223,14 +252,17 @@ export default function RoutinesList({
                 <Text style={styles.startRoutineButtonText}>Start Routine</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity
-                style={styles.routineOptionsButton}
-                onPress={() => onSetRoutineOptionsVisible(
-                  routineOptionsVisible === routine.id ? null : routine.id
-                )}
-              >
-                <Text style={styles.optionsButtonText}>⋯</Text>
-              </TouchableOpacity>
+              {/* Only show hamburger button for non-default routines */}
+              {!isDefaultRoutine(routine) && (
+                <TouchableOpacity
+                  style={styles.routineOptionsButton}
+                  onPress={() => onSetRoutineOptionsVisible(
+                    routineOptionsVisible === routine.id ? null : routine.id
+                  )}
+                >
+                  <Text style={styles.optionsButtonText}>⋯</Text>
+                </TouchableOpacity>
+              )}
             </View>
             
             {/* Routine Options Menu */}

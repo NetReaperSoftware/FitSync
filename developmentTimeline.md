@@ -40,7 +40,7 @@ The "Active Workout" interface screen will contain the following:
 # 2b 
 Within the routines section, there will be a "New Routine" button, which will bring up a screen Similar to the "Active Workout" interface screen in 2a, however, there will be no tracking metrics for duration, volume, or sets, and will instead only have "Add Exersise" button, and a field to name the routine. The Users can also create a folder(s) in this section, to categorize their routines in custom named folders. There cannot be nested folders, as they are only used to categorize routines.
 
-# 2c //Partial Completion
+# 2c // Completion
 Add more options to routines and folders. Routines should have a horizontal hamburger button to signify more options (...). The options should be:
 - Rename Folder
 - Delete Folder
@@ -75,5 +75,10 @@ Originally, must allow:
 
 # 3b
 - Set up the tables for user routines
-
 - workout_exercises table contains 
+
+# Step 4: Implement DB tracking for workout data
+When completing an active workout, be it from a routine or from a new workout, the database needs to be updated to hold the users workout information, including the exercises completed, their sets, reps, and weight values.
+
+# 4a
+Implement ...

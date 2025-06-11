@@ -29,6 +29,7 @@ type Exercise = {
   name: string;
   muscleGroup: string;
   sets: ExerciseSet[];
+  notes?: string;
 };
 
 type DatabaseExercise = {
@@ -77,6 +78,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   const [folderOptionsVisible, setFolderOptionsVisible] = useState<string | null>(null);
   const [routineOptionsVisible, setRoutineOptionsVisible] = useState<string | null>(null);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
+  const [replacingExerciseIndex, setReplacingExerciseIndex] = useState<number | null>(null);
 
   const styles = createStyles(theme);
 
@@ -179,19 +181,42 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       }
 
       // Convert database routines to app format
-      const convertedRoutines: Routine[] = routinesData.map((dbRoutine: any) => ({
-        id: dbRoutine.id,
-        name: dbRoutine.name,
-        exercises: dbRoutine.workout_routine_exercises
-          .sort((a: any, b: any) => a.order_in_routine - b.order_in_routine)
-          .map((dbExercise: any) => ({
-            id: dbExercise.exercises.id,
-            name: dbExercise.exercises.name,
-            muscleGroup: dbExercise.exercises.muscle_group_primary,
-            sets: [] // Routines don't have actual sets, just templates
-          })),
-        folderId: dbRoutine.folder_id
-      }));
+      const convertedRoutines: Routine[] = routinesData.map((dbRoutine: any) => {
+        // Group routine exercises by exercise_id to reconstruct sets
+        const exerciseGroups = new Map();
+        
+        dbRoutine.workout_routine_exercises
+          .sort((a: any, b: any) => a.order_in_routine - b.order_in_routine || (a.set_number || 0) - (b.set_number || 0))
+          .forEach((dbExercise: any) => {
+            const exerciseId = dbExercise.exercises.id;
+            if (!exerciseGroups.has(exerciseId)) {
+              exerciseGroups.set(exerciseId, {
+                id: exerciseId,
+                name: dbExercise.exercises.name,
+                muscleGroup: dbExercise.exercises.muscle_group_primary,
+                sets: [],
+                order: dbExercise.order_in_routine
+              });
+            }
+            
+            // Add this set to the exercise
+            exerciseGroups.get(exerciseId).sets.push({
+              id: `s${dbExercise.id}`,
+              weight: dbExercise.weight_lbs || 0,
+              reps: dbExercise.reps || 0,
+              completed: false
+            });
+          });
+        
+        return {
+          id: dbRoutine.id,
+          name: dbRoutine.name,
+          exercises: Array.from(exerciseGroups.values())
+            .sort((a, b) => a.order - b.order)
+            .map(({ order, ...exercise }) => exercise), // Remove order field
+          folderId: dbRoutine.folder_id
+        };
+      });
 
       setRoutines(convertedRoutines);
       console.log('Successfully fetched routines:', convertedRoutines.length);
@@ -325,10 +350,142 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       id: exercise.id, // Use the actual database exercise ID
       name: exercise.name,
       muscleGroup: exercise.muscle_group_primary,
-      sets: [],
+      sets: [{
+        id: `s${Date.now()}-1`,
+        weight: 0,
+        reps: 0,
+        completed: false,
+      }],
     };
     setCurrentRoutineExercises([...currentRoutineExercises, newExercise]);
     setExerciseScreenVisible(false);
+  };
+
+  const updateRoutineExerciseSet = (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: number) => {
+    setCurrentRoutineExercises(prevExercises => {
+      const updatedExercises = [...prevExercises];
+      const exercise = updatedExercises[exerciseIndex];
+      if (exercise && exercise.sets[setIndex]) {
+        exercise.sets[setIndex] = {
+          ...exercise.sets[setIndex],
+          [field]: value
+        };
+      }
+      return updatedExercises;
+    });
+  };
+
+  const addRoutineExerciseSet = (exerciseIndex: number) => {
+    setCurrentRoutineExercises(prevExercises => {
+      const updatedExercises = [...prevExercises];
+      const exercise = updatedExercises[exerciseIndex];
+      if (exercise) {
+        const newSet: ExerciseSet = {
+          id: `s${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          weight: 0,
+          reps: 0,
+          completed: false,
+        };
+        exercise.sets.push(newSet);
+      }
+      return updatedExercises;
+    });
+  };
+
+  const updateExerciseNotes = (exerciseIndex: number, notes: string) => {
+    setCurrentRoutineExercises(prevExercises => {
+      const updatedExercises = [...prevExercises];
+      if (updatedExercises[exerciseIndex]) {
+        updatedExercises[exerciseIndex] = {
+          ...updatedExercises[exerciseIndex],
+          notes: notes
+        };
+      }
+      return updatedExercises;
+    });
+  };
+
+  const removeRoutineExerciseSet = (exerciseIndex: number, setIndex: number) => {
+    setCurrentRoutineExercises(prevExercises => {
+      const updatedExercises = [...prevExercises];
+      const exercise = updatedExercises[exerciseIndex];
+      if (exercise && exercise.sets.length > 1) { // Don't allow removing the last set
+        exercise.sets.splice(setIndex, 1);
+      }
+      return updatedExercises;
+    });
+  };
+
+  const removeExerciseFromRoutine = (exerciseIndex: number) => {
+    setCurrentRoutineExercises(prevExercises => {
+      const updatedExercises = [...prevExercises];
+      updatedExercises.splice(exerciseIndex, 1);
+      return updatedExercises;
+    });
+  };
+
+  const replaceExerciseInRoutine = (exerciseIndex: number) => {
+    setReplacingExerciseIndex(exerciseIndex);
+    setExerciseScreenVisible(true);
+  };
+
+  const reorderRoutineExercises = (fromIndex: number, toIndex: number) => {
+    const reorderedExercises = [...currentRoutineExercises];
+    const [movedExercise] = reorderedExercises.splice(fromIndex, 1);
+    reorderedExercises.splice(toIndex, 0, movedExercise);
+    
+    setCurrentRoutineExercises(reorderedExercises);
+    
+    // If we're editing an existing routine, update the order in the database immediately
+    if (editingRoutineId) {
+      updateExerciseOrderInDatabase(reorderedExercises);
+    }
+  };
+
+  const updateExerciseOrderInDatabase = async (reorderedExercises: Exercise[]) => {
+    try {
+      // Delete existing routine exercises
+      const { error: deleteError } = await supabase
+        .schema('fitness')
+        .from('workout_routine_exercises')
+        .delete()
+        .eq('routine_id', editingRoutineId);
+
+      if (deleteError) {
+        console.error('Error deleting old routine exercises for reorder:', deleteError);
+        return;
+      }
+
+      // Re-insert exercises with new order
+      const routineExercises: any[] = [];
+      reorderedExercises.forEach((exercise, exerciseIndex) => {
+        exercise.sets.forEach((set, setIndex) => {
+          routineExercises.push({
+            routine_id: editingRoutineId,
+            exercise_id: exercise.id,
+            sets: 1,
+            reps: set.reps || 0,
+            weight_lbs: set.weight || 0,
+            order_in_routine: exerciseIndex + 1, // New order based on reordered array
+            set_number: setIndex + 1
+          });
+        });
+      });
+
+      const { error: insertError } = await supabase
+        .schema('fitness')
+        .from('workout_routine_exercises')
+        .insert(routineExercises);
+
+      if (insertError) {
+        console.error('Error updating exercise order:', insertError);
+        return;
+      }
+
+      console.log('Successfully updated exercise order in database');
+    } catch (error) {
+      console.error('Unexpected error updating exercise order:', error);
+    }
   };
 
   const saveRoutine = async () => {
@@ -375,14 +532,20 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
 
         // Insert updated exercises
         if (currentRoutineExercises.length > 0) {
-          const routineExercises = currentRoutineExercises.map((exercise, index) => ({
-            routine_id: editingRoutineId,
-            exercise_id: exercise.id,
-            sets: 3, // Default values
-            reps: 10,
-            weight_lbs: 0,
-            order_in_routine: index + 1
-          }));
+          const routineExercises: any[] = [];
+          currentRoutineExercises.forEach((exercise, exerciseIndex) => {
+            exercise.sets.forEach((set, setIndex) => {
+              routineExercises.push({
+                routine_id: editingRoutineId,
+                exercise_id: exercise.id,
+                sets: 1, // Each row represents one set
+                reps: set.reps || 0,
+                weight_lbs: set.weight || 0,
+                order_in_routine: exerciseIndex + 1,
+                set_number: setIndex + 1
+              });
+            });
+          });
 
           const { error: exercisesError } = await supabase
             .schema('fitness')
@@ -429,14 +592,20 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
 
         // Insert routine exercises
         if (currentRoutineExercises.length > 0) {
-          const routineExercises = currentRoutineExercises.map((exercise, index) => ({
-            routine_id: newRoutineData.id,
-            exercise_id: exercise.id,
-            sets: 3, // Default values
-            reps: 10,
-            weight_lbs: 0,
-            order_in_routine: index + 1
-          }));
+          const routineExercises: any[] = [];
+          currentRoutineExercises.forEach((exercise, exerciseIndex) => {
+            exercise.sets.forEach((set, setIndex) => {
+              routineExercises.push({
+                routine_id: newRoutineData.id,
+                exercise_id: exercise.id,
+                sets: 1, // Each row represents one set
+                reps: set.reps || 0,
+                weight_lbs: set.weight || 0,
+                order_in_routine: exerciseIndex + 1,
+                set_number: setIndex + 1
+              });
+            });
+          });
 
           const { error: exercisesError } = await supabase
             .schema('fitness')
@@ -549,15 +718,22 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   };
 
   const startRoutineFromTemplate = (routine: Routine) => {
-    const workoutExercises = routine.exercises.map(exercise => ({
+    const workoutExercises = routine.exercises.map((exercise, exerciseIndex) => ({
       ...exercise,
-      id: `e${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      sets: [{
-        id: `s${Date.now()}-1`,
-        weight: 0,
-        reps: 0,
-        completed: false,
-      }],
+      id: `e${Date.now()}-${exerciseIndex}-${Math.random().toString(36).substr(2, 5)}`,
+      sets: exercise.sets.length > 0 
+        ? exercise.sets.map((set, setIndex) => ({
+            id: `s${Date.now()}-${exerciseIndex}-${setIndex}`,
+            weight: set.weight || 0,
+            reps: set.reps || 0,
+            completed: false,
+          }))
+        : [{
+            id: `s${Date.now()}-${exerciseIndex}-1`,
+            weight: 0,
+            reps: 0,
+            completed: false,
+          }],
     }));
     
     setCurrentWorkoutExercises(workoutExercises);
@@ -673,7 +849,32 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
 
   const handleExerciseSelection = (exercise: DatabaseExercise) => {
     if (routineCreationVisible) {
-      addExerciseToRoutine(exercise);
+      if (replacingExerciseIndex !== null) {
+        // Replace exercise at specific index
+        const newExercise: Exercise = {
+          id: exercise.id,
+          name: exercise.name,
+          muscleGroup: exercise.muscle_group_primary,
+          sets: [{
+            id: `s${Date.now()}-1`,
+            weight: 0,
+            reps: 0,
+            completed: false,
+          }],
+        };
+        
+        setCurrentRoutineExercises(prevExercises => {
+          const updatedExercises = [...prevExercises];
+          updatedExercises[replacingExerciseIndex] = newExercise;
+          return updatedExercises;
+        });
+        
+        setReplacingExerciseIndex(null);
+        setExerciseScreenVisible(false);
+      } else {
+        // Add new exercise
+        addExerciseToRoutine(exercise);
+      }
     } else {
       addExerciseToWorkout(exercise);
     }
@@ -719,14 +920,34 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       }
 
       // Copy the exercises from the default routine
-      const routineExercises = defaultRoutine.exercises.map((exercise, index) => ({
-        routine_id: newRoutineData.id,
-        exercise_id: exercise.id,
-        sets: 3, // Default sets
-        reps: 10, // Default reps
-        weight_lbs: 0, // Default weight
-        order_in_routine: index + 1
-      }));
+      const routineExercises: any[] = [];
+      defaultRoutine.exercises.forEach((exercise, exerciseIndex) => {
+        if (exercise.sets.length === 0) {
+          // If no sets, create default set
+          routineExercises.push({
+            routine_id: newRoutineData.id,
+            exercise_id: exercise.id,
+            sets: 1,
+            reps: 10,
+            weight_lbs: 0,
+            order_in_routine: exerciseIndex + 1,
+            set_number: 1
+          });
+        } else {
+          // Copy existing sets
+          exercise.sets.forEach((set, setIndex) => {
+            routineExercises.push({
+              routine_id: newRoutineData.id,
+              exercise_id: exercise.id,
+              sets: 1,
+              reps: set.reps || 10,
+              weight_lbs: set.weight || 0,
+              order_in_routine: exerciseIndex + 1,
+              set_number: setIndex + 1
+            });
+          });
+        }
+      });
 
       const { error: exercisesError } = await supabase
         .schema('fitness')
@@ -839,6 +1060,13 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           onRoutineNameChange={setRoutineName}
           onFolderSelect={setSelectedFolder}
           onAddExercise={() => setExerciseScreenVisible(true)}
+          onUpdateExerciseSet={updateRoutineExerciseSet}
+          onAddExerciseSet={addRoutineExerciseSet}
+          onRemoveExerciseSet={removeRoutineExerciseSet}
+          onRemoveExercise={removeExerciseFromRoutine}
+          onReplaceExercise={replaceExerciseInRoutine}
+          onReorderExercises={reorderRoutineExercises}
+          onUpdateExerciseNotes={updateExerciseNotes}
         />
 
         <FolderCreationModal
@@ -856,6 +1084,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           onRename={renameRoutine}
           onCancel={cancelRoutineRename}
         />
+
         </View>
       </TouchableWithoutFeedback>
     </SafeAreaView>
