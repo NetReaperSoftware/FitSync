@@ -58,5 +58,22 @@ Start Routine
 Routine2 ...
 Start Routine
 
-# 2d 
+# 2d //Completed
 There is a new screen ExerciseScreen.tsx that should list all exercises stored within my supabase database backend. WorkoutTrackerScreen needs to be updated to bring up this screen, and import workouts from it when adding exercises into a New Workout or in a Routine.
+
+# Step 3 Database Configuration
+The "fitness" schema needs to be updated to support the apps Workout Screen and its functionality.
+Originally, must allow:
+- API endpoint for schema 'fitness' //Completed
+
+
+# 3a //Completed
+- Set up the list of all default exercises in exercises table. 
+- Establish RLS to allow integration with API
+- Service key access for seeding initial database 
+- Create RLS policies to enable querying
+
+# 3b
+- Set up the tables for user routines
+
+- workout_exercises table contains 

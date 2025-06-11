@@ -95,21 +95,12 @@ export default function RoutineCreationModal({
               />
               
               {/* Folder Selection */}
-              <Text style={styles.inputLabel}>Folder (Optional)</Text>
+              <Text style={styles.inputLabel}>Folder</Text>
               <ScrollView 
                 horizontal 
                 style={styles.folderSelection}
                 showsHorizontalScrollIndicator={false}
               >
-                <TouchableOpacity
-                  style={[
-                    styles.folderOption,
-                    !selectedFolder && styles.selectedFolderOption
-                  ]}
-                  onPress={() => onFolderSelect(undefined)}
-                >
-                  <Text style={styles.folderOptionText}>No Folder</Text>
-                </TouchableOpacity>
                 {folders.map(folder => (
                   <TouchableOpacity
                     key={folder.id}
@@ -119,7 +110,10 @@ export default function RoutineCreationModal({
                     ]}
                     onPress={() => onFolderSelect(folder.id)}
                   >
-                    <Text style={styles.folderOptionText}>{folder.name}</Text>
+                    <Text style={[
+                      styles.folderOptionText,
+                      selectedFolder === folder.id && styles.selectedFolderOptionText
+                    ]}>{folder.name}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -235,6 +229,9 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.text,
     fontSize: 14,
     fontWeight: '600',
+  },
+  selectedFolderOptionText: {
+    color: 'white',
   },
   routineExerciseCard: {
     backgroundColor: theme.cardBackground,

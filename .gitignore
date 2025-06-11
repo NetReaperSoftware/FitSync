@@ -79,3 +79,5 @@ yarn-error.log
 
 # Other
 sendEmail.ts
+fitness-schema-sql.txt
+sql-injects

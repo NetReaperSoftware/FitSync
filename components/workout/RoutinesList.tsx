@@ -43,6 +43,7 @@ interface RoutinesListProps {
   onEditRoutine: (routine: Routine) => void;
   onDeleteRoutine: (routineId: string) => void;
   onStartNewRoutineInFolder: (folderId: string) => void;
+  onRenameRoutine: (routineId: string, currentName: string) => void;
 }
 
 export default function RoutinesList({
@@ -61,7 +62,8 @@ export default function RoutinesList({
   onStartRoutineFromTemplate,
   onEditRoutine,
   onDeleteRoutine,
-  onStartNewRoutineInFolder
+  onStartNewRoutineInFolder,
+  onRenameRoutine
 }: RoutinesListProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
@@ -180,6 +182,12 @@ export default function RoutinesList({
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.optionItem}
+                      onPress={() => onRenameRoutine(routine.id, routine.name)}
+                    >
+                      <Text style={styles.optionText}>Rename Routine</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.optionItem}
                       onPress={() => onDeleteRoutine(routine.id)}
                     >
                       <Text style={[styles.optionText, styles.deleteOptionText]}>Delete Routine</Text>
@@ -233,6 +241,12 @@ export default function RoutinesList({
                   onPress={() => onEditRoutine(routine)}
                 >
                   <Text style={styles.optionText}>Edit Routine</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.optionItem}
+                  onPress={() => onRenameRoutine(routine.id, routine.name)}
+                >
+                  <Text style={styles.optionText}>Rename Routine</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.optionItem}

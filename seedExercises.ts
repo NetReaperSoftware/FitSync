@@ -31,12 +31,15 @@ async function seedExercises() {
 
   const { data, error } = await supabase
     .from('exercises')
-    .insert(defaultExercises);
+    .upsert(defaultExercises, { 
+      onConflict: 'name',
+      ignoreDuplicates: false 
+    });
 
   if (error) {
-    console.error('Error seeding exercises:', error);
+    console.error('Error upserting exercises:', error);
   } else {
-    console.log('Seeded default exercises:', data);
+    console.log('Upserted default exercises:', data);
   }
 }
 
