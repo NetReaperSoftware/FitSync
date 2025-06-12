@@ -34,42 +34,26 @@ interface RoutinesListProps {
   routines: Routine[];
   folders: Folder[];
   collapsedFolders: Set<string>;
-  folderOptionsVisible: string | null;
-  routineOptionsVisible: string | null;
   onCreateFolder: () => void;
   onStartNewRoutine: () => void;
   onToggleFolderCollapse: (folderId: string) => void;
-  onSetFolderOptionsVisible: (folderId: string | null) => void;
-  onSetRoutineOptionsVisible: (routineId: string | null) => void;
-  onStartRenamingFolder: (folderId: string, currentName: string) => void;
-  onDeleteFolder: (folderId: string) => void;
+  onShowFolderOptions: (folder: Folder) => void;
+  onShowRoutineOptions: (routine: Routine) => void;
   onStartRoutineFromTemplate: (routine: Routine) => void;
   onEditRoutine: (routine: Routine) => void;
-  onDeleteRoutine: (routineId: string) => void;
-  onStartNewRoutineInFolder: (folderId: string) => void;
-  onRenameRoutine: (routineId: string, currentName: string) => void;
-  onBackgroundPress: () => void;
 }
 
 export default function RoutinesList({
   routines,
   folders,
   collapsedFolders,
-  folderOptionsVisible,
-  routineOptionsVisible,
   onCreateFolder,
   onStartNewRoutine,
   onToggleFolderCollapse,
-  onSetFolderOptionsVisible,
-  onSetRoutineOptionsVisible,
-  onStartRenamingFolder,
-  onDeleteFolder,
+  onShowFolderOptions,
+  onShowRoutineOptions,
   onStartRoutineFromTemplate,
-  onEditRoutine,
-  onDeleteRoutine,
-  onStartNewRoutineInFolder,
-  onRenameRoutine,
-  onBackgroundPress
+  onEditRoutine
 }: RoutinesListProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
@@ -77,11 +61,6 @@ export default function RoutinesList({
   // Helper function to check if a folder is a default folder
   const isDefaultFolder = (folder: Folder) => {
     return folder.isDefault === true;
-  };
-
-  // Helper function to check if a folder is "My Routines" 
-  const isMyRoutinesFolder = (folderName: string) => {
-    return folderName === 'My Routines';
   };
 
   // Helper function to check if a routine is a default routine
@@ -113,7 +92,6 @@ export default function RoutinesList({
         const isCollapsed = collapsedFolders.has(folder.id);
         const folderRoutines = routines.filter(routine => routine.folderId === folder.id);
         const isDefault = isDefaultFolder(folder);
-        const isMyRoutines = isMyRoutinesFolder(folder.name);
         
         return (
           <View key={folder.id} style={styles.folderContainer}>
@@ -138,44 +116,13 @@ export default function RoutinesList({
               {!isDefault && (
                 <TouchableOpacity
                   style={styles.optionsButton}
-                  onPress={() => onSetFolderOptionsVisible(
-                    folderOptionsVisible === folder.id ? null : folder.id
-                  )}
+                  onPress={() => onShowFolderOptions(folder)}
                 >
                   <Text style={styles.optionsButtonText}>⋯</Text>
                 </TouchableOpacity>
               )}
             </View>
             
-            {/* Folder Options Menu */}
-            {folderOptionsVisible === folder.id && (
-              <View style={styles.optionsMenu}>
-                {/* Show rename option only for non-My Routines folders */}
-                {!isMyRoutines && (
-                  <TouchableOpacity
-                    style={styles.optionItem}
-                    onPress={() => onStartRenamingFolder(folder.id, folder.name)}
-                  >
-                    <Text style={styles.optionText}>Rename Folder</Text>
-                  </TouchableOpacity>
-                )}
-                {/* Show delete option only for non-My Routines folders */}
-                {!isMyRoutines && (
-                  <TouchableOpacity
-                    style={styles.optionItem}
-                    onPress={() => onDeleteFolder(folder.id)}
-                  >
-                    <Text style={[styles.optionText, styles.deleteOptionText]}>Delete Folder</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.optionItem}
-                  onPress={() => onStartNewRoutineInFolder(folder.id)}
-                >
-                  <Text style={styles.optionText}>Add New Routine</Text>
-                </TouchableOpacity>
-              </View>
-            )}
             
             {/* Folder Contents */}
             {!isCollapsed && folderRoutines.map(routine => (
@@ -207,38 +154,13 @@ export default function RoutinesList({
                   {!isDefaultRoutine(routine) && (
                     <TouchableOpacity
                       style={styles.routineOptionsButton}
-                      onPress={() => onSetRoutineOptionsVisible(
-                        routineOptionsVisible === routine.id ? null : routine.id
-                      )}
+                      onPress={() => onShowRoutineOptions(routine)}
                     >
                       <Text style={styles.optionsButtonText}>⋯</Text>
                     </TouchableOpacity>
                   )}
                 </View>
                 
-                {/* Routine Options Menu */}
-                {routineOptionsVisible === routine.id && (
-                  <View style={styles.routineOptionsMenu}>
-                    <TouchableOpacity
-                      style={styles.optionItem}
-                      onPress={() => onEditRoutine(routine)}
-                    >
-                      <Text style={styles.optionText}>Edit Routine</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.optionItem}
-                      onPress={() => onRenameRoutine(routine.id, routine.name)}
-                    >
-                      <Text style={styles.optionText}>Rename Routine</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.optionItem}
-                      onPress={() => onDeleteRoutine(routine.id)}
-                    >
-                      <Text style={[styles.optionText, styles.deleteOptionText]}>Delete Routine</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
             ))}
           </View>
@@ -277,38 +199,13 @@ export default function RoutinesList({
               {!isDefaultRoutine(routine) && (
                 <TouchableOpacity
                   style={styles.routineOptionsButton}
-                  onPress={() => onSetRoutineOptionsVisible(
-                    routineOptionsVisible === routine.id ? null : routine.id
-                  )}
+                  onPress={() => onShowRoutineOptions(routine)}
                 >
                   <Text style={styles.optionsButtonText}>⋯</Text>
                 </TouchableOpacity>
               )}
             </View>
             
-            {/* Routine Options Menu */}
-            {routineOptionsVisible === routine.id && (
-              <View style={styles.routineOptionsMenu}>
-                <TouchableOpacity
-                  style={styles.optionItem}
-                  onPress={() => onEditRoutine(routine)}
-                >
-                  <Text style={styles.optionText}>Edit Routine</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.optionItem}
-                  onPress={() => onRenameRoutine(routine.id, routine.name)}
-                >
-                  <Text style={styles.optionText}>Rename Routine</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.optionItem}
-                  onPress={() => onDeleteRoutine(routine.id)}
-                >
-                  <Text style={[styles.optionText, styles.deleteOptionText]}>Delete Routine</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         ))}
       

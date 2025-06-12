@@ -13,6 +13,7 @@ import {
   PanResponder
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import OptionsBottomSheet from './OptionsBottomSheet';
 
 type Exercise = {
   id: string;
@@ -70,13 +71,15 @@ export default function RoutineCreationModal({
 }: RoutineCreationModalProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
-  const [exerciseOptionsVisible, setExerciseOptionsVisible] = useState<number | null>(null);
   const [reorderModeExercise, setReorderModeExercise] = useState<number | null>(null);
   const [swipedRows, setSwipedRows] = useState<Set<string>>(new Set());
+  const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
+  const [bottomSheetOptions, setBottomSheetOptions] = useState<any[]>([]);
+  const [bottomSheetTitle, setBottomSheetTitle] = useState<string | undefined>(undefined);
 
   const handleLongPress = (exerciseIndex: number) => {
     setReorderModeExercise(exerciseIndex);
-    setExerciseOptionsVisible(null); // Close any open options menu
+    setBottomSheetVisible(false); // Close any open bottom sheet
   };
 
   const moveExercise = (fromIndex: number, direction: 'up' | 'down') => {
@@ -92,10 +95,32 @@ export default function RoutineCreationModal({
   };
 
   const handleBackgroundPress = () => {
-    setExerciseOptionsVisible(null);
     setReorderModeExercise(null);
+    setBottomSheetVisible(false);
     // Clear all swiped rows
     setSwipedRows(new Set());
+  };
+
+  const showExerciseOptions = (exerciseIndex: number, exercise: Exercise) => {
+    const options: Array<{text: string; onPress: () => Promise<void>; isDelete?: boolean}> = [
+      {
+        text: 'Replace Exercise',
+        onPress: async () => {
+          onReplaceExercise(exerciseIndex);
+        }
+      },
+      {
+        text: 'Remove Exercise',
+        onPress: async () => {
+          onRemoveExercise(exerciseIndex);
+        },
+        isDelete: true
+      }
+    ];
+    
+    setBottomSheetTitle(`${exercise.name} Options`);
+    setBottomSheetOptions(options);
+    setBottomSheetVisible(true);
   };
 
   // SwipeableSetRow Component
@@ -375,9 +400,7 @@ export default function RoutineCreationModal({
                       ) : (
                         <TouchableOpacity
                           style={styles.exerciseOptionsButton}
-                          onPress={() => setExerciseOptionsVisible(
-                            exerciseOptionsVisible === exerciseIndex ? null : exerciseIndex
-                          )}
+                          onPress={() => showExerciseOptions(exerciseIndex, exercise)}
                         >
                           <Text style={styles.exerciseOptionsButtonText}>⋯</Text>
                         </TouchableOpacity>
@@ -400,29 +423,6 @@ export default function RoutineCreationModal({
                     </View>
                   )}
                   
-                  {/* Exercise Options Menu */}
-                  {exerciseOptionsVisible === exerciseIndex && (
-                    <View style={styles.exerciseOptionsMenu}>
-                      <TouchableOpacity
-                        style={styles.exerciseOptionItem}
-                        onPress={() => {
-                          onRemoveExercise(exerciseIndex);
-                          setExerciseOptionsVisible(null);
-                        }}
-                      >
-                        <Text style={[styles.exerciseOptionText, styles.deleteOptionText]}>Remove Exercise</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.exerciseOptionItem}
-                        onPress={() => {
-                          onReplaceExercise(exerciseIndex);
-                          setExerciseOptionsVisible(null);
-                        }}
-                      >
-                        <Text style={styles.exerciseOptionText}>Replace Exercise</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
                   
                   {/* Exercise Sets Table - Hidden when in reorder mode */}
                   {!isCollapsed && (
@@ -469,6 +469,13 @@ export default function RoutineCreationModal({
           </ScrollView>
           </View>
         </TouchableWithoutFeedback>
+        
+        <OptionsBottomSheet
+          visible={bottomSheetVisible}
+          title={bottomSheetTitle}
+          options={bottomSheetOptions}
+          onClose={() => setBottomSheetVisible(false)}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -679,31 +686,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 18,
     color: theme.textSecondary,
     fontWeight: 'bold',
-  },
-  exerciseOptionsMenu: {
-    backgroundColor: theme.surface,
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: theme.borderLight,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  exerciseOptionItem: {
-    padding: 12,
-    borderRadius: 4,
-  },
-  exerciseOptionText: {
-    fontSize: 16,
-    color: theme.text,
-    fontWeight: '500',
-  },
-  deleteOptionText: {
-    color: theme.error,
   },
   exerciseNameContainer: {
     flex: 1,

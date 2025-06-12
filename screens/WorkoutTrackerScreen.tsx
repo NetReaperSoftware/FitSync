@@ -14,6 +14,8 @@ import RoutineCreationModal from '../components/workout/RoutineCreationModal';
 import FolderCreationModal from '../components/workout/FolderCreationModal';
 import RoutineRenameModal from '../components/workout/RoutineRenameModal';
 import FolderRenameModal from '../components/workout/FolderRenameModal';
+import FolderDeleteConfirmationModal from '../components/workout/FolderDeleteConfirmationModal';
+import OptionsBottomSheet from '../components/workout/OptionsBottomSheet';
 import RoutinesList from '../components/workout/RoutinesList';
 import ExerciseSelectionScreen from './ExerciseSelectionScreen';
 import { dataSyncService } from '../services/DataSyncService';
@@ -83,11 +85,14 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState('');
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-  const [folderOptionsVisible, setFolderOptionsVisible] = useState<string | null>(null);
-  const [routineOptionsVisible, setRoutineOptionsVisible] = useState<string | null>(null);
+  const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
+  const [bottomSheetOptions, setBottomSheetOptions] = useState<any[]>([]);
+  const [bottomSheetTitle, setBottomSheetTitle] = useState<string | undefined>(undefined);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [replacingExerciseIndex, setReplacingExerciseIndex] = useState<number | null>(null);
   const [isCreatingCopy, setIsCreatingCopy] = useState<boolean>(false);
+  const [folderDeleteConfirmVisible, setFolderDeleteConfirmVisible] = useState(false);
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
 
   const styles = createStyles(theme);
 
@@ -730,7 +735,6 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     setCurrentRoutineExercises([...routineToEdit.exercises]);
     setSelectedFolder(routineToEdit.folderId);
     setRoutineCreationVisible(true);
-    setRoutineOptionsVisible(null);
   };
 
   const deleteRoutine = async (routineId: string) => {
@@ -754,7 +758,6 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       // For default routines, we can't actually delete them from the database
       // They'll just not show up for this user anymore (this is optional behavior)
       console.log('Cannot delete default routines');
-      setRoutineOptionsVisible(null);
       return;
     }
 
@@ -794,7 +797,6 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       throw error; // Re-throw to let the UI handle the error
     }
 
-    setRoutineOptionsVisible(null);
   };
 
   const startRoutineFromTemplate = (routine: Routine) => {
@@ -876,11 +878,26 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     if (isDefaultFolder(folder)) {
       // Cannot delete default folders
       console.log('Cannot delete default folders');
-      setFolderOptionsVisible(null);
+        return;
+    }
+
+    // Check if folder has routines - show confirmation modal if it does
+    const routinesInFolder = routines.filter(r => r.folderId === folderId);
+    if (routinesInFolder.length > 0) {
+      setDeletingFolderId(folderId);
+      setFolderDeleteConfirmVisible(true);
       return;
     }
 
-    // OPTIMISTIC UPDATE: Delete folder immediately from UI
+    // If folder is empty, delete immediately
+    await performFolderDeletion(folderId);
+  };
+
+  const performFolderDeletion = async (folderId: string) => {
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) return;
+
+    // OPTIMISTIC UPDATE: Delete folder and all routines immediately from UI
     try {
       console.log('Starting optimistic deletion for folder:', folderId);
       
@@ -888,14 +905,10 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       const folderToDelete = { ...folder };
       const routinesInFolder = routines.filter(r => r.folderId === folderId);
       
-      // Immediately update local state - move routines out of folder and remove folder
-      setRoutines(prevRoutines => prevRoutines.map(routine => 
-        routine.folderId === folderId 
-          ? { ...routine, folderId: undefined }
-          : routine
-      ));
+      // Immediately update local state - delete folder and all routines in it
+      setRoutines(prevRoutines => prevRoutines.filter(routine => routine.folderId !== folderId));
       setFolders(prevFolders => prevFolders.filter(f => f.id !== folderId));
-      console.log('Optimistically removed folder from UI');
+      console.log('Optimistically removed folder and', routinesInFolder.length, 'routines from UI');
 
       // Queue for background deletion (only if it's not a temp ID)
       if (!folderId.startsWith('temp_')) {
@@ -903,6 +916,14 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         try {
           dataSyncService.deleteFolderOptimistic(folderId);
           console.log('🗑️ Folder queued for deletion:', folderId);
+          
+          // Also queue deletion for all routines in the folder
+          routinesInFolder.forEach(routine => {
+            if (!routine.id.startsWith('temp_')) {
+              dataSyncService.deleteRoutineOptimistic(routine.id);
+              console.log('🗑️ Routine queued for deletion:', routine.id);
+            }
+          });
           
           // Log sync status for debugging
           setTimeout(() => {
@@ -913,10 +934,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           console.error('❌ Failed to queue folder deletion:', error);
           // Rollback optimistic update
           setFolders(prevFolders => [...prevFolders, folderToDelete]);
-          setRoutines(prevRoutines => prevRoutines.map(routine => {
-            const wasInFolder = routinesInFolder.find(r => r.id === routine.id);
-            return wasInFolder ? { ...routine, folderId: folderId } : routine;
-          }));
+          setRoutines(prevRoutines => [...prevRoutines, ...routinesInFolder]);
           throw new Error('Failed to delete folder. Please try again.');
         }
       } else {
@@ -927,8 +945,6 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       console.error('Error in optimistic folder deletion:', error);
       alert('Failed to delete folder. Please try again.');
     }
-
-    setFolderOptionsVisible(null);
   };
 
   const startRenamingFolder = async (folderId: string, currentName: string) => {
@@ -939,7 +955,6 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     if (isDefaultFolder(folder)) {
       console.log('Cannot rename default folders');
       alert('Default folders cannot be renamed.');
-      setFolderOptionsVisible(null);
       return;
     }
     
@@ -949,7 +964,6 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     setRenamingFolderId(folderId);
     setRenameFolderName(currentName);
     setFolderRenameVisible(true);
-    setFolderOptionsVisible(null);
   };
 
   const renameFolderOptimistic = (folderId: string, newName: string) => {
@@ -1017,14 +1031,12 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     
     setSelectedFolder(targetFolderId);
     startNewRoutine();
-    setFolderOptionsVisible(null);
   };
 
   const startRenamingRoutine = (routineId: string, currentName: string) => {
     setRenamingRoutineId(routineId);
     setNewRoutineName(currentName);
     setRoutineRenameVisible(true);
-    setRoutineOptionsVisible(null);
   };
 
   const renameRoutine = async () => {
@@ -1144,8 +1156,70 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   };
 
   const handleBackgroundPress = () => {
-    setFolderOptionsVisible(null);
-    setRoutineOptionsVisible(null);
+    setBottomSheetVisible(false);
+  };
+
+  const showFolderOptions = (folder: Folder) => {
+    const isMyRoutines = folder.name === 'My Routines';
+    const options: Array<{text: string; onPress: () => Promise<void>; isDelete?: boolean}> = [];
+    
+    // Add rename option for non-My Routines folders
+    if (!isMyRoutines) {
+      options.push({
+        text: 'Rename Folder',
+        onPress: async () => startRenamingFolder(folder.id, folder.name)
+      });
+    }
+    
+    // Add delete option for non-My Routines folders  
+    if (!isMyRoutines) {
+      options.push({
+        text: 'Delete Folder',
+        onPress: async () => {
+          await deleteFolder(folder.id);
+        },
+        isDelete: true
+      });
+    }
+    
+    // Add new routine option
+    options.push({
+      text: 'Add New Routine',
+      onPress: async () => await startNewRoutineInFolder(folder.id)
+    });
+    
+    setBottomSheetTitle(folder.name);
+    setBottomSheetOptions(options);
+    setBottomSheetVisible(true);
+  };
+
+  const showRoutineOptions = (routine: Routine) => {
+    const options: Array<{text: string; onPress: () => Promise<void>; isDelete?: boolean}> = [
+      {
+        text: 'Edit Routine',
+        onPress: async () => editRoutine(routine)
+      },
+      {
+        text: 'Rename Routine',
+        onPress: async () => startRenamingRoutine(routine.id, routine.name)
+      },
+      {
+        text: 'Delete Routine',
+        onPress: async () => {
+          try {
+            await deleteRoutine(routine.id);
+          } catch (error) {
+            console.error('Failed to delete routine:', error);
+            alert('Failed to delete routine. Please try again.');
+          }
+        },
+        isDelete: true
+      }
+    ];
+    
+    setBottomSheetTitle(routine.name);
+    setBottomSheetOptions(options);
+    setBottomSheetVisible(true);
   };
 
   // Utility function to check if a routine is a default routine (not created by user)
@@ -1352,29 +1426,13 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
               routines={routines}
               folders={folders}
               collapsedFolders={collapsedFolders}
-              folderOptionsVisible={folderOptionsVisible}
-              routineOptionsVisible={routineOptionsVisible}
               onCreateFolder={() => setFolderCreationVisible(true)}
               onStartNewRoutine={startNewRoutine}
               onToggleFolderCollapse={toggleFolderCollapse}
-              onSetFolderOptionsVisible={setFolderOptionsVisible}
-              onSetRoutineOptionsVisible={setRoutineOptionsVisible}
-              onStartRenamingFolder={startRenamingFolder}
-              onDeleteFolder={deleteFolder}
+              onShowFolderOptions={showFolderOptions}
+              onShowRoutineOptions={showRoutineOptions}
               onStartRoutineFromTemplate={startRoutineFromTemplate}
               onEditRoutine={editRoutine}
-              onDeleteRoutine={async (routineId: string) => {
-                try {
-                  await deleteRoutine(routineId);
-                } catch (error) {
-                  console.error('Failed to delete routine:', error);
-                  // TODO: Show user-friendly error message
-                  alert('Failed to delete routine. Please try again.');
-                }
-              }}
-              onStartNewRoutineInFolder={startNewRoutineInFolder}
-              onRenameRoutine={startRenamingRoutine}
-              onBackgroundPress={handleBackgroundPress}
             />
           </View>
         </ScrollView>
@@ -1436,6 +1494,30 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           onFolderNameChange={setRenameFolderName}
           onRename={renameFolderFromModal}
           onCancel={cancelFolderRename}
+        />
+
+        <OptionsBottomSheet
+          visible={bottomSheetVisible}
+          title={bottomSheetTitle}
+          options={bottomSheetOptions}
+          onClose={() => setBottomSheetVisible(false)}
+        />
+
+        <FolderDeleteConfirmationModal
+          visible={folderDeleteConfirmVisible}
+          folderName={deletingFolderId ? folders.find(f => f.id === deletingFolderId)?.name || '' : ''}
+          routineCount={deletingFolderId ? routines.filter(r => r.folderId === deletingFolderId).length : 0}
+          onConfirm={async () => {
+            if (deletingFolderId) {
+              await performFolderDeletion(deletingFolderId);
+            }
+            setFolderDeleteConfirmVisible(false);
+            setDeletingFolderId(null);
+          }}
+          onCancel={() => {
+            setFolderDeleteConfirmVisible(false);
+            setDeletingFolderId(null);
+          }}
         />
 
       </View>

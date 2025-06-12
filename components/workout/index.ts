@@ -4,5 +4,6 @@ export { default as ExerciseSelectionModal } from './ExerciseSelectionModal';
 export { default as ExerciseReorderModal } from './ExerciseReorderModal';
 export { default as FolderCreationModal } from './FolderCreationModal';
 export { default as FolderRenameModal } from './FolderRenameModal';
+export { default as OptionsBottomSheet } from './OptionsBottomSheet';
 export { default as RoutinesList } from './RoutinesList';
 export { default as WorkoutHistory } from './WorkoutHistory';

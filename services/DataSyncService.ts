@@ -403,22 +403,55 @@ class DataSyncService {
       
       console.log('Folder verification passed, proceeding with deletion');
       
-      // First, move all routines in this folder to no folder (null)
-      console.log('Moving routines out of folder before deletion...');
-      const { error: routinesError, count: routinesUpdated } = await supabase
+      // Get all routines in this folder that need to be deleted
+      const { data: routinesInFolder, error: routinesError } = await supabase
         .schema('fitness')
         .from('workout_routines')
-        .update({ folder_id: null })
+        .select('id')
         .eq('folder_id', folderData.id);
 
       if (routinesError) {
-        console.error('Failed to move routines out of folder:', routinesError);
+        console.error('Failed to fetch routines in folder:', routinesError);
         return { success: false, error: routinesError.message };
       }
       
-      console.log(`Moved ${routinesUpdated} routines out of folder`);
+      console.log(`Found ${routinesInFolder?.length || 0} routines to delete with folder`);
 
-      // Then delete the folder
+      // Delete all routine exercises for routines in this folder
+      if (routinesInFolder && routinesInFolder.length > 0) {
+        const routineIds = routinesInFolder.map(r => r.id);
+        
+        console.log('Deleting routine exercises for routines in folder...');
+        const { error: exercisesError } = await supabase
+          .schema('fitness')
+          .from('workout_routine_exercises')
+          .delete()
+          .in('routine_id', routineIds);
+
+        if (exercisesError) {
+          console.error('Failed to delete routine exercises:', exercisesError);
+          return { success: false, error: exercisesError.message };
+        }
+
+        console.log('Successfully deleted routine exercises');
+
+        // Delete all routines in this folder
+        console.log('Deleting routines in folder...');
+        const { error: deleteRoutinesError, count: routinesDeleted } = await supabase
+          .schema('fitness')
+          .from('workout_routines')
+          .delete({ count: 'exact' })
+          .eq('folder_id', folderData.id);
+
+        if (deleteRoutinesError) {
+          console.error('Failed to delete routines in folder:', deleteRoutinesError);
+          return { success: false, error: deleteRoutinesError.message };
+        }
+        
+        console.log(`Successfully deleted ${routinesDeleted} routine(s) from folder`);
+      }
+
+      // Finally, delete the folder
       console.log('Deleting folder:', folderData.id);
       const { error: folderError, count: foldersDeleted } = await supabase
         .schema('fitness')
