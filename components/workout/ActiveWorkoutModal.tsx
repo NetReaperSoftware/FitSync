@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -32,6 +32,7 @@ interface ActiveWorkoutModalProps {
   visible: boolean;
   exercises: Exercise[];
   workoutStartTime: Date | null;
+  totalPausedDuration: number;
   onMinimize: () => void;
   onFinish: () => void;
   onDiscard: () => void;
@@ -46,6 +47,7 @@ export default function ActiveWorkoutModal({
   visible,
   exercises,
   workoutStartTime,
+  totalPausedDuration,
   onMinimize,
   onFinish,
   onDiscard,
@@ -58,15 +60,47 @@ export default function ActiveWorkoutModal({
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const [swipedRows, setSwipedRows] = useState<Set<string>>(new Set());
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every second for duration tracking
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const getWorkoutStats = () => {
-    const totalSets = exercises.reduce((total, exercise) => total + exercise.sets.length, 0);
-    const totalVolume = exercises.reduce((total, exercise) => 
-      total + exercise.sets.reduce((setTotal, set) => setTotal + (set.weight * set.reps), 0), 0
+    // Only count completed sets for volume and total sets
+    const completedSets = exercises.reduce((total, exercise) => 
+      total + exercise.sets.filter(set => set.completed).length, 0
     );
-    const duration = workoutStartTime ? Math.floor((new Date().getTime() - workoutStartTime.getTime()) / 60000) : 0;
+    const totalVolume = exercises.reduce((total, exercise) => 
+      total + exercise.sets
+        .filter(set => set.completed)
+        .reduce((setTotal, set) => setTotal + (set.weight * set.reps), 0), 0
+    );
     
-    return { totalSets, totalVolume, duration };
+    // Calculate duration excluding paused time
+    const durationInSeconds = workoutStartTime ? 
+      Math.floor((currentTime.getTime() - workoutStartTime.getTime() - totalPausedDuration) / 1000) : 0;
+    
+    return { completedSets, totalVolume, durationInSeconds };
+  };
+
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
   };
 
   const stats = getWorkoutStats();
@@ -86,14 +120,12 @@ export default function ActiveWorkoutModal({
     const deleteOpacity = React.useRef(new Animated.Value(0)).current;
     const rowId = `${exercise.id}-${setIndex}`;
     const isSwipedOpen = swipedRows.has(rowId);
-    const [isSwiping, setIsSwiping] = useState(false);
 
     const panResponder = PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
         return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
       },
       onPanResponderGrant: () => {
-        setIsSwiping(true);
         // Show delete button when swipe starts
         Animated.timing(deleteOpacity, {
           toValue: 1,
@@ -107,7 +139,6 @@ export default function ActiveWorkoutModal({
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        setIsSwiping(false);
         if (gestureState.dx < -40) {
           // Swipe left - show delete button
           Animated.spring(translateX, {
@@ -221,14 +252,14 @@ export default function ActiveWorkoutModal({
               />
               <TouchableOpacity
                 style={[
-                  styles.completionButton,
-                  set.completed ? styles.completedButton : styles.pendingButton,
+                  styles.checkboxButton,
+                  set.completed ? styles.checkedBox : styles.uncheckedBox,
                 ]}
                 onPress={() => onToggleSetCompletion(exercise.id, set.id)}
               >
-                <Text style={styles.completionButtonText}>
-                  {set.completed ? '✓' : ''}
-                </Text>
+                {set.completed && (
+                  <Text style={styles.checkboxText}>✓</Text>
+                )}
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
@@ -269,15 +300,15 @@ export default function ActiveWorkoutModal({
           {/* Workout Stats */}
           <View style={styles.workoutStats}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.duration}</Text>
-              <Text style={styles.statLabel}>Duration (min)</Text>
+              <Text style={styles.statValue}>{formatDuration(stats.durationInSeconds)}</Text>
+              <Text style={styles.statLabel}>Duration</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{stats.totalVolume}</Text>
               <Text style={styles.statLabel}>Volume (lbs)</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.totalSets}</Text>
+              <Text style={styles.statValue}>{stats.completedSets}</Text>
               <Text style={styles.statLabel}>Sets</Text>
             </View>
           </View>
@@ -472,24 +503,27 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingHorizontal: 8,
     marginHorizontal: 4,
   },
-  completionButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  checkboxButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
     marginHorizontal: 10,
+    borderWidth: 2,
   },
-  completedButton: {
+  checkedBox: {
     backgroundColor: theme.success,
+    borderColor: theme.success,
   },
-  pendingButton: {
-    backgroundColor: theme.border,
+  uncheckedBox: {
+    backgroundColor: 'transparent',
+    borderColor: theme.border,
   },
-  completionButtonText: {
+  checkboxText: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: 14,
   },
   addSetButton: {
     backgroundColor: theme.cardBackground,

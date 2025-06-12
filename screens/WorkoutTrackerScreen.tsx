@@ -93,6 +93,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   const [isCreatingCopy, setIsCreatingCopy] = useState<boolean>(false);
   const [folderDeleteConfirmVisible, setFolderDeleteConfirmVisible] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
+  const [workoutPauseTime, setWorkoutPauseTime] = useState<Date | null>(null);
+  const [totalPausedDuration, setTotalPausedDuration] = useState(0);
 
   const styles = createStyles(theme);
 
@@ -296,16 +298,26 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     setWorkoutStartTime(new Date());
     setCurrentWorkoutExercises([]);
     setIsWorkoutMinimized(false);
+    setWorkoutPauseTime(null);
+    setTotalPausedDuration(0);
   };
 
   const minimizeWorkout = () => {
     setIsWorkoutMinimized(true);
     setActiveWorkoutVisible(false);
+    setWorkoutPauseTime(new Date()); // Start pause timer
   };
 
   const restoreWorkout = () => {
     setIsWorkoutMinimized(false);
     setActiveWorkoutVisible(true);
+    
+    // Calculate paused duration and add to total
+    if (workoutPauseTime) {
+      const pausedDuration = new Date().getTime() - workoutPauseTime.getTime();
+      setTotalPausedDuration(prev => prev + pausedDuration);
+      setWorkoutPauseTime(null);
+    }
   };
 
   const finishWorkout = () => {
@@ -313,6 +325,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     setIsWorkoutMinimized(false);
     setWorkoutStartTime(null);
     setCurrentWorkoutExercises([]);
+    setWorkoutPauseTime(null);
+    setTotalPausedDuration(0);
   };
 
   const discardWorkout = () => {
@@ -320,6 +334,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     setIsWorkoutMinimized(false);
     setWorkoutStartTime(null);
     setCurrentWorkoutExercises([]);
+    setWorkoutPauseTime(null);
+    setTotalPausedDuration(0);
   };
 
   const addExerciseToWorkout = (exercise: DatabaseExercise) => {
@@ -1408,7 +1424,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
                 onPress={restoreWorkout}
               >
                 <Text style={styles.minimizedWorkoutText}>
-                  Active Workout in Progress - Tap to Resume
+                  Workout Paused - Tap to Resume
                 </Text>
               </TouchableOpacity>
             )}
@@ -1441,6 +1457,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           visible={activeWorkoutVisible}
           exercises={currentWorkoutExercises}
           workoutStartTime={workoutStartTime}
+          totalPausedDuration={totalPausedDuration}
           onMinimize={minimizeWorkout}
           onFinish={finishWorkout}
           onDiscard={discardWorkout}
