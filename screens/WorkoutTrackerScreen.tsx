@@ -5,8 +5,7 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
-  TouchableWithoutFeedback
+  SafeAreaView
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../supabaseClient';
@@ -14,8 +13,10 @@ import ActiveWorkoutModal from '../components/workout/ActiveWorkoutModal';
 import RoutineCreationModal from '../components/workout/RoutineCreationModal';
 import FolderCreationModal from '../components/workout/FolderCreationModal';
 import RoutineRenameModal from '../components/workout/RoutineRenameModal';
+import FolderRenameModal from '../components/workout/FolderRenameModal';
 import RoutinesList from '../components/workout/RoutinesList';
 import ExerciseSelectionScreen from './ExerciseSelectionScreen';
+import { dataSyncService } from '../services/DataSyncService';
 
 type ExerciseSet = {
   id: string;
@@ -78,6 +79,9 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   const [routineRenameVisible, setRoutineRenameVisible] = useState(false);
   const [renamingRoutineId, setRenamingRoutineId] = useState<string | null>(null);
   const [newRoutineName, setNewRoutineName] = useState('');
+  const [folderRenameVisible, setFolderRenameVisible] = useState(false);
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [renameFolderName, setRenameFolderName] = useState('');
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [folderOptionsVisible, setFolderOptionsVisible] = useState<string | null>(null);
   const [routineOptionsVisible, setRoutineOptionsVisible] = useState<string | null>(null);
@@ -94,6 +98,46 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     fetchExercises();
     fetchFolders();
     fetchRoutines();
+    
+    // Log sync status every 5 seconds for debugging
+    const syncStatusInterval = setInterval(() => {
+      const status = dataSyncService.getSyncStatus();
+      if (status.queueLength > 0) {
+        console.log('📊 DataSync Status:', status);
+      }
+    }, 5000);
+
+    // Add global debugging functions
+    if (__DEV__) {
+      // @ts-ignore
+      global.syncStatus = () => {
+        const status = dataSyncService.getSyncStatus();
+        console.log('📊 Current Sync Status:', JSON.stringify(status, null, 2));
+        return status;
+      };
+      // @ts-ignore
+      global.forceSync = () => {
+        console.log('🔄 Forcing sync manually...');
+        dataSyncService.forceSyncNow();
+      };
+      // @ts-ignore
+      global.clearSync = () => {
+        dataSyncService.clearSyncQueue();
+      };
+      // @ts-ignore
+      global.testFolderDelete = (folderId) => {
+        console.log('🧪 Testing folder deletion for:', folderId);
+        deleteFolder(folderId);
+      };
+      // @ts-ignore
+      global.testFolderRename = (folderId, newName) => {
+        console.log('🧪 Testing folder rename for:', folderId, 'to:', newName);
+        renameFolderOptimistic(folderId, newName);
+      };
+      console.log('🔧 Debug functions available: syncStatus(), forceSync(), clearSync(), testFolderDelete(id), testFolderRename(id, name)');
+    }
+
+    return () => clearInterval(syncStatusInterval);
   }, []);
 
   const fetchExercises = async () => {
@@ -325,7 +369,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         if (exercise.id !== exerciseId) return exercise;
         
         const newSet: ExerciseSet = {
-          id: `s${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          id: `s${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           weight: 0,
           reps: 0,
           completed: false,
@@ -397,7 +441,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       const exercise = updatedExercises[exerciseIndex];
       if (exercise) {
         const newSet: ExerciseSet = {
-          id: `s${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          id: `s${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           weight: 0,
           reps: 0,
           completed: false,
@@ -518,8 +562,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         return;
       }
 
-      if (editingRoutineId) {
-        // Update existing routine in database
+      if (editingRoutineId && !editingRoutineId.startsWith('temp_')) {
+        // Update existing routine in database (only for real database IDs)
         const { error: routineError } = await supabase
           .schema('fitness')
           .from('workout_routines')
@@ -586,62 +630,55 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
             : routine
         ));
         setEditingRoutineId(null);
+      } else if (editingRoutineId && editingRoutineId.startsWith('temp_')) {
+        // Editing a temporary routine - replace it with updated version
+        console.log('Updating temporary routine:', editingRoutineId);
+        
+        // Update the existing temporary routine in local state
+        setRoutines(prevRoutines => prevRoutines.map(routine =>
+          routine.id === editingRoutineId
+            ? {
+                ...routine,
+                name: routineName,
+                exercises: currentRoutineExercises,
+                folderId: selectedFolder,
+              }
+            : routine
+        ));
+        setEditingRoutineId(null);
       } else {
-        // Create new routine in database
-        const { data: newRoutineData, error: routineError } = await supabase
-          .schema('fitness')
-          .from('workout_routines')
-          .insert({
+        // OPTIMISTIC UPDATE: Create new routine with temporary ID
+        const tempId = dataSyncService.generateTempId();
+        const newRoutine: Routine = {
+          id: tempId,
+          name: routineName,
+          exercises: currentRoutineExercises,
+          folderId: selectedFolder,
+          isDefault: false,
+          isUserOwned: true
+        };
+
+        // Immediately update UI
+        addRoutineToState(newRoutine);
+        console.log('Optimistically created routine with temp ID:', tempId);
+
+        // Queue for background sync (now synchronous and instant)
+        try {
+          const syncTempId = dataSyncService.createRoutineOptimistic({
             name: routineName,
             description: 'User created routine',
-            is_default: false,
-            created_by: user.data.user.id,
-            folder_id: selectedFolder
-          })
-          .select()
-          .single();
-
-        if (routineError) {
-          console.error('Error creating routine:', routineError);
+            folderId: selectedFolder,
+            exercises: currentRoutineExercises,
+            tempId: tempId
+          });
+          console.log('🚀 Routine queued for sync:', routineName, 'with temp ID:', syncTempId);
+        } catch (error) {
+          console.error('❌ Failed to queue routine creation:', error);
+          // Rollback optimistic update
+          setRoutines(prevRoutines => prevRoutines.filter(r => r.id !== tempId));
+          alert('Failed to save routine. Please try again.');
           return;
         }
-
-        // Insert routine exercises
-        if (currentRoutineExercises.length > 0) {
-          const routineExercises: any[] = [];
-          currentRoutineExercises.forEach((exercise, exerciseIndex) => {
-            exercise.sets.forEach((set, setIndex) => {
-              routineExercises.push({
-                routine_id: newRoutineData.id,
-                exercise_id: exercise.id,
-                sets: 1, // Each row represents one set
-                reps: set.reps || 0,
-                weight_lbs: set.weight || 0,
-                order_in_routine: exerciseIndex + 1,
-                set_number: setIndex + 1
-              });
-            });
-          });
-
-          const { error: exercisesError } = await supabase
-            .schema('fitness')
-            .from('workout_routine_exercises')
-            .insert(routineExercises);
-
-          if (exercisesError) {
-            console.error('Error creating routine exercises:', exercisesError);
-            return;
-          }
-        }
-
-        // Add to local state
-        const newRoutine: Routine = {
-          id: newRoutineData.id,
-          name: newRoutineData.name,
-          exercises: currentRoutineExercises,
-          folderId: newRoutineData.folder_id,
-        };
-        addRoutineToState(newRoutine);
       }
       
       setRoutineCreationVisible(false);
@@ -726,99 +763,34 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       throw new Error('You can only delete routines that you created.');
     }
 
-    // For user-created routines, delete from database
+    // OPTIMISTIC UPDATE: Delete routine immediately from UI
     try {
-      console.log('Starting deletion process for user-created routine');
+      console.log('Starting optimistic deletion for user-created routine');
       
-      // First verify the routine exists in the database and user owns it
-      const { data: routineCheck, error: checkError } = await supabase
-        .schema('fitness')
-        .from('workout_routines')
-        .select('id, name, created_by')
-        .eq('id', routineId)
-        .single();
+      // Store routine data for potential rollback
+      const routineToDelete = { ...routine };
       
-      if (checkError) {
-        console.error('Error checking routine existence:', checkError);
-        throw new Error('Routine not found in database.');
-      }
-      
-      if (!routineCheck) {
-        throw new Error('Routine not found in database.');
-      }
-      
-      const user = await supabase.auth.getUser();
-      if (routineCheck.created_by !== user.data.user?.id) {
-        throw new Error('You can only delete routines that you created.');
-      }
-      
-      console.log('Routine verification passed, proceeding with deletion');
-      
-      // First delete the routine exercises
-      console.log('Deleting routine exercises...');
-      const { error: exercisesError, count: exercisesDeleted } = await supabase
-        .schema('fitness')
-        .from('workout_routine_exercises')
-        .delete({ count: 'exact' })
-        .eq('routine_id', routineId);
+      // Immediately remove from local state
+      setRoutines(prevRoutines => prevRoutines.filter(r => r.id !== routineId));
+      console.log('Optimistically removed routine from UI');
 
-      if (exercisesError) {
-        console.error('Error deleting routine exercises:', {
-          error: exercisesError,
-          code: exercisesError.code,
-          message: exercisesError.message,
-          details: exercisesError.details,
-          hint: exercisesError.hint
-        });
-        
-        // Provide more specific error messages based on error codes
-        if (exercisesError.code === '23503') {
-          throw new Error('Cannot delete routine: foreign key constraint violation.');
-        } else if (exercisesError.code === '42501') {
-          throw new Error('Permission denied: you do not have permission to delete this routine.');
-        } else {
-          throw new Error(`Database error: ${exercisesError.message}`);
+      // Queue for background deletion (only if it's not a temp ID)
+      if (!routineId.startsWith('temp_')) {
+        try {
+          dataSyncService.deleteRoutineOptimistic(routineId);
+          console.log('🗑️ Routine queued for deletion:', routineId);
+        } catch (error) {
+          console.error('❌ Failed to queue routine deletion:', error);
+          // Rollback optimistic update
+          setRoutines(prevRoutines => [...prevRoutines, routineToDelete]);
+          throw new Error('Failed to delete routine. Please try again.');
         }
+      } else {
+        console.log('⏭️ Skipping database deletion for temporary routine:', routineId);
       }
-
-      console.log(`Successfully deleted ${exercisesDeleted} routine exercises`);
-
-      // Then delete the routine itself
-      console.log('Deleting routine...');
-      const { error: routineError, count: routinesDeleted } = await supabase
-        .schema('fitness')
-        .from('workout_routines')
-        .delete({ count: 'exact' })
-        .eq('id', routineId);
-
-      if (routineError) {
-        console.error('Error deleting routine:', {
-          error: routineError,
-          code: routineError.code,
-          message: routineError.message,
-          details: routineError.details,
-          hint: routineError.hint
-        });
-        
-        // Provide more specific error messages based on error codes
-        if (routineError.code === '23503') {
-          throw new Error('Cannot delete routine: it is still referenced by other data.');
-        } else if (routineError.code === '42501') {
-          throw new Error('Permission denied: you do not have permission to delete this routine.');
-        } else {
-          throw new Error(`Database error: ${routineError.message}`);
-        }
-      }
-
-      console.log(`Successfully deleted ${routinesDeleted} routine(s)`);
-
-      // Remove from local state
-      setRoutines(routines.filter(routine => routine.id !== routineId));
-      console.log('Successfully removed routine from local state');
       
     } catch (error) {
-      console.error('Unexpected error deleting routine:', error);
-      // You might want to show an error alert to the user here
+      console.error('Error in optimistic routine deletion:', error);
       throw error; // Re-throw to let the UI handle the error
     }
 
@@ -828,7 +800,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   const startRoutineFromTemplate = (routine: Routine) => {
     const workoutExercises = routine.exercises.map((exercise, exerciseIndex) => ({
       ...exercise,
-      id: `e${Date.now()}-${exerciseIndex}-${Math.random().toString(36).substr(2, 5)}`,
+      id: `e${Date.now()}-${exerciseIndex}-${Math.random().toString(36).substring(2, 7)}`,
       sets: exercise.sets.length > 0 
         ? exercise.sets.map((set, setIndex) => ({
             id: `s${Date.now()}-${exerciseIndex}-${setIndex}`,
@@ -854,12 +826,35 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   const createFolder = () => {
     if (!newFolderName.trim()) return;
     
+    // OPTIMISTIC UPDATE: Create folder with temporary ID
+    const tempId = dataSyncService.generateTempId();
     const newFolder: Folder = {
-      id: `f${Date.now()}`,
-      name: newFolderName,
+      id: tempId,
+      name: newFolderName.trim(),
+      isDefault: false,
+      isUserOwned: true
     };
     
+    // Immediately update UI
     setFolders([...folders, newFolder]);
+    console.log('Optimistically created folder with temp ID:', tempId);
+    
+    // Queue for background sync
+    try {
+      const syncTempId = dataSyncService.createFolderOptimistic({
+        name: newFolderName.trim(),
+        description: 'User created folder',
+        tempId: tempId
+      });
+      console.log('📁 Folder queued for sync:', newFolderName.trim(), 'with temp ID:', syncTempId);
+    } catch (error) {
+      console.error('❌ Failed to queue folder creation:', error);
+      // Rollback optimistic update
+      setFolders(prevFolders => prevFolders.filter(f => f.id !== tempId));
+      alert('Failed to create folder. Please try again.');
+      return;
+    }
+    
     setFolderCreationVisible(false);
     setNewFolderName('');
   };
@@ -885,40 +880,52 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       return;
     }
 
+    // OPTIMISTIC UPDATE: Delete folder immediately from UI
     try {
-      // Move all routines in this folder to no folder
+      console.log('Starting optimistic deletion for folder:', folderId);
+      
+      // Store folder and routines data for potential rollback
+      const folderToDelete = { ...folder };
       const routinesInFolder = routines.filter(r => r.folderId === folderId);
-      for (const routine of routinesInFolder) {
-        await supabase
-          .schema('fitness')
-          .from('workout_routines')
-          .update({ folder_id: null })
-          .eq('id', routine.id);
-      }
-
-      // Delete the folder from database
-      const { error: folderError } = await supabase
-        .schema('fitness')
-        .from('workout_routine_folders')
-        .delete()
-        .eq('id', folderId);
-
-      if (folderError) {
-        console.error('Error deleting folder:', folderError);
-        return;
-      }
-
-      // Update local state
-      setRoutines(routines.map(routine => 
+      
+      // Immediately update local state - move routines out of folder and remove folder
+      setRoutines(prevRoutines => prevRoutines.map(routine => 
         routine.folderId === folderId 
           ? { ...routine, folderId: undefined }
           : routine
       ));
+      setFolders(prevFolders => prevFolders.filter(f => f.id !== folderId));
+      console.log('Optimistically removed folder from UI');
+
+      // Queue for background deletion (only if it's not a temp ID)
+      if (!folderId.startsWith('temp_')) {
+        console.log('🔄 Queuing folder deletion for database sync:', folderId);
+        try {
+          dataSyncService.deleteFolderOptimistic(folderId);
+          console.log('🗑️ Folder queued for deletion:', folderId);
+          
+          // Log sync status for debugging
+          setTimeout(() => {
+            const status = dataSyncService.getSyncStatus();
+            console.log('📊 Sync status after folder deletion queue:', status);
+          }, 100);
+        } catch (error) {
+          console.error('❌ Failed to queue folder deletion:', error);
+          // Rollback optimistic update
+          setFolders(prevFolders => [...prevFolders, folderToDelete]);
+          setRoutines(prevRoutines => prevRoutines.map(routine => {
+            const wasInFolder = routinesInFolder.find(r => r.id === routine.id);
+            return wasInFolder ? { ...routine, folderId: folderId } : routine;
+          }));
+          throw new Error('Failed to delete folder. Please try again.');
+        }
+      } else {
+        console.log('⏭️ Skipping database deletion for temporary folder:', folderId);
+      }
       
-      setFolders(folders.filter(folder => folder.id !== folderId));
-      console.log('Successfully deleted folder');
     } catch (error) {
-      console.error('Unexpected error deleting folder:', error);
+      console.error('Error in optimistic folder deletion:', error);
+      alert('Failed to delete folder. Please try again.');
     }
 
     setFolderOptionsVisible(null);
@@ -931,16 +938,64 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     // Prevent renaming default folders
     if (isDefaultFolder(folder)) {
       console.log('Cannot rename default folders');
-      // TODO: Show user-friendly message that default folders cannot be renamed
       alert('Default folders cannot be renamed.');
       setFolderOptionsVisible(null);
       return;
     }
     
-    // For user-owned folders, implement renaming logic here if needed
-    // TODO: Implement folder renaming UI and logic
-    console.log('Folder renaming not yet implemented for user folders');
+    console.log('📝 Starting folder rename for:', folderId, 'current name:', currentName);
+    
+    // Use custom modal for folder renaming
+    setRenamingFolderId(folderId);
+    setRenameFolderName(currentName);
+    setFolderRenameVisible(true);
     setFolderOptionsVisible(null);
+  };
+
+  const renameFolderOptimistic = (folderId: string, newName: string) => {
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) return;
+
+    // OPTIMISTIC UPDATE: Update folder name immediately in UI
+    const oldName = folder.name;
+    
+    // Immediately update local state
+    setFolders(prevFolders => prevFolders.map(f =>
+      f.id === folderId
+        ? { ...f, name: newName }
+        : f
+    ));
+    console.log('Optimistically renamed folder from', oldName, 'to', newName);
+
+    // Queue for background sync (only if it's not a temp ID)
+    if (!folderId.startsWith('temp_')) {
+      console.log('🔄 Queuing folder rename for database sync:', folderId, 'new name:', newName);
+      try {
+        dataSyncService.updateFolderOptimistic({
+          id: folderId,
+          name: newName,
+          description: 'User created folder'
+        });
+        console.log('📝 Folder rename queued for sync:', folderId);
+        
+        // Log sync status for debugging
+        setTimeout(() => {
+          const status = dataSyncService.getSyncStatus();
+          console.log('📊 Sync status after folder rename queue:', status);
+        }, 100);
+      } catch (error) {
+        console.error('❌ Failed to queue folder rename:', error);
+        // Rollback optimistic update
+        setFolders(prevFolders => prevFolders.map(f =>
+          f.id === folderId
+            ? { ...f, name: oldName }
+            : f
+        ));
+        alert('Failed to rename folder. Please try again.');
+      }
+    } else {
+      console.log('⏭️ Skipping database update for temporary folder:', folderId);
+    }
   };
 
   const startNewRoutineInFolder = async (folderId: string) => {
@@ -988,26 +1043,40 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         return;
       }
 
-      // Update routine name in database
-      const { error } = await supabase
-        .schema('fitness')
-        .from('workout_routines')
-        .update({ name: newRoutineName.trim() })
-        .eq('id', renamingRoutineId);
-
-      if (error) {
-        console.error('Error renaming routine:', error);
-        return;
-      }
-
-      // Update local state
-      setRoutines(routines.map(r =>
+      // OPTIMISTIC UPDATE: Update routine name immediately in UI
+      const oldName = routine.name;
+      
+      // Immediately update local state
+      setRoutines(prevRoutines => prevRoutines.map(r =>
         r.id === renamingRoutineId
           ? { ...r, name: newRoutineName.trim() }
           : r
       ));
+      console.log('Optimistically renamed routine from', oldName, 'to', newRoutineName.trim());
 
-      console.log('Successfully renamed routine');
+      // Queue for background sync (only if it's not a temp ID)
+      if (!renamingRoutineId.startsWith('temp_')) {
+        try {
+          dataSyncService.updateRoutineOptimistic({
+            id: renamingRoutineId,
+            name: newRoutineName.trim(),
+            folderId: routine.folderId
+          });
+          console.log('📝 Routine rename queued for sync:', renamingRoutineId);
+        } catch (error) {
+          console.error('❌ Failed to queue routine rename:', error);
+          // Rollback optimistic update
+          setRoutines(prevRoutines => prevRoutines.map(r =>
+            r.id === renamingRoutineId
+              ? { ...r, name: oldName }
+              : r
+          ));
+          alert('Failed to rename routine. Please try again.');
+          return;
+        }
+      } else {
+        console.log('⏭️ Skipping database update for temporary routine:', renamingRoutineId);
+      }
     } catch (error) {
       console.error('Unexpected error renaming routine:', error);
     }
@@ -1021,6 +1090,23 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
     setRoutineRenameVisible(false);
     setRenamingRoutineId(null);
     setNewRoutineName('');
+  };
+
+  const renameFolderFromModal = () => {
+    if (!renameFolderName.trim() || !renamingFolderId) return;
+    
+    console.log('📝 User entered new folder name:', renameFolderName.trim());
+    renameFolderOptimistic(renamingFolderId, renameFolderName.trim());
+    
+    setFolderRenameVisible(false);
+    setRenamingFolderId(null);
+    setRenameFolderName('');
+  };
+
+  const cancelFolderRename = () => {
+    setFolderRenameVisible(false);
+    setRenamingFolderId(null);
+    setRenameFolderName('');
   };
 
 
@@ -1342,6 +1428,14 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           onRoutineNameChange={setNewRoutineName}
           onRename={renameRoutine}
           onCancel={cancelRoutineRename}
+        />
+
+        <FolderRenameModal
+          visible={folderRenameVisible}
+          folderName={renameFolderName}
+          onFolderNameChange={setRenameFolderName}
+          onRename={renameFolderFromModal}
+          onCancel={cancelFolderRename}
         />
 
       </View>
