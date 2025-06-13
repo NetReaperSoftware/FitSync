@@ -4,14 +4,17 @@ import {
   Text,
   View,
   TouchableOpacity,
-  ScrollView,
   Modal,
   TextInput,
   SafeAreaView,
   TouchableWithoutFeedback,
-  Animated,
-  PanResponder
+  Animated
 } from 'react-native';
+import {
+  ScrollView,
+  Gesture,
+  GestureDetector,
+} from 'react-native-gesture-handler';
 import { useTheme } from '../../contexts/ThemeContext';
 import OptionsBottomSheet from './OptionsBottomSheet';
 
@@ -144,60 +147,101 @@ export default function RoutineCreationModal({
       setLocalWeight(set.weight?.toString() || '0');
       setLocalReps(set.reps?.toString() || '0');
     }, [set.weight, set.reps]);
-    const [isSwiping, setIsSwiping] = useState(false);
 
-    const panResponder = PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderGrant: () => {
-        setIsSwiping(true);
-        // Show delete button when swipe starts
-        Animated.timing(deleteOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) { // Only allow left swipe
-          translateX.setValue(Math.max(gestureState.dx, -80));
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        setIsSwiping(false);
-        if (gestureState.dx < -40) {
-          // Swipe left - show delete button
-          Animated.spring(translateX, {
-            toValue: -80,
-            useNativeDriver: true,
-          }).start();
-          setSwipedRows(prev => new Set([...prev, rowId]));
-          // Keep delete button visible
-          Animated.timing(deleteOpacity, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
+    const panGesture = Gesture.Pan()
+      .activeOffsetX([-10, 10])
+      .failOffsetY([-5, 5])
+      .onUpdate((event) => {
+        const currentlyOpen = swipedRows.has(rowId);
+        
+        if (currentlyOpen) {
+          // If already open, allow both left and right swipes
+          if (event.translationX > 0) {
+            // Right swipe to close - start from -80 position
+            translateX.setValue(Math.min(-80 + event.translationX, 0));
+          } else {
+            // Left swipe when already open - keep at -80
+            translateX.setValue(-80);
+          }
         } else {
-          // Snap back and hide delete button
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-          Animated.timing(deleteOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
-          setSwipedRows(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(rowId);
-            return newSet;
-          });
+          // If not open, only allow left swipe to open
+          if (event.translationX < 0) {
+            translateX.setValue(Math.max(event.translationX, -80));
+            // Show delete button when swiping left
+            if (event.translationX < -10) {
+              deleteOpacity.setValue(1);
+            }
+          }
         }
-      },
-    });
+      })
+      .onEnd((event) => {
+        const currentlyOpen = swipedRows.has(rowId);
+        
+        if (currentlyOpen) {
+          // If already open, check if user wants to close with right swipe
+          if (event.translationX > 40 || (event.translationX > 20 && event.velocityX > 500)) {
+            // Close the swipe
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            Animated.timing(deleteOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }).start();
+            setSwipedRows(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(rowId);
+              return newSet;
+            });
+          } else {
+            // Keep it open
+            Animated.spring(translateX, {
+              toValue: -80,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            deleteOpacity.setValue(1);
+          }
+        } else {
+          // If not open, check if user wants to open with left swipe
+          const shouldShowDelete = event.translationX < -40 || (event.translationX < -20 && event.velocityX < -500);
+          
+          if (shouldShowDelete) {
+            // Open the swipe and keep it visible
+            Animated.spring(translateX, {
+              toValue: -80,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            setSwipedRows(prev => new Set([...prev, rowId]));
+            deleteOpacity.setValue(1);
+          } else {
+            // Snap back to closed
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            Animated.timing(deleteOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }).start();
+          }
+        }
+      });
+
+    const tapGesture = Gesture.Tap()
+      .onEnd(() => {
+        handleTap();
+      });
 
     // Function to close swipe from outside
     React.useEffect(() => {
@@ -253,15 +297,14 @@ export default function RoutineCreationModal({
           </TouchableOpacity>
         </Animated.View>
         
-        <Animated.View
-          style={[
-            styles.tableRow,
-            { transform: [{ translateX }] },
-            isLast && styles.lastTableRow
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <TouchableWithoutFeedback onPress={handleTap}>
+        <GestureDetector gesture={Gesture.Simultaneous(panGesture, tapGesture)}>
+          <Animated.View
+            style={[
+              styles.tableRow,
+              { transform: [{ translateX }] },
+              isLast && styles.lastTableRow
+            ]}
+          >
             <View style={styles.setRowContent}>
               <Text style={styles.setNumber}>{setIndex + 1}</Text>
               <TextInput
@@ -289,8 +332,8 @@ export default function RoutineCreationModal({
                 placeholderTextColor={theme.textMuted}
               />
             </View>
-          </TouchableWithoutFeedback>
-        </Animated.View>
+          </Animated.View>
+        </GestureDetector>
       </View>
     );
   };
