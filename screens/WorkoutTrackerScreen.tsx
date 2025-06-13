@@ -247,11 +247,13 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   // Handle folder deletion with routine coordination
   const handleFolderDeletion = useCallback(async (folderId: string) => {
     const routinesInFolder = routineManagement.routines.filter(r => r.folderId === folderId);
-    await folderManagement.deleteFolder(folderId, routinesInFolder);
     
     // Remove routines from routine management state
     const updatedRoutines = routineManagement.routines.filter(r => r.folderId !== folderId);
     routineManagement.setRoutines(updatedRoutines);
+    
+    // Now delete the folder itself (which will also handle database cleanup)
+    await folderManagement.performFolderDeletion(folderId, routinesInFolder);
   }, [folderManagement, routineManagement]);
 
   // If exercise selection screen is visible, show it
