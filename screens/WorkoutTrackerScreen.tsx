@@ -52,11 +52,47 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   // Database operations that require coordination between hooks
   const saveWorkoutToDatabase = useCallback(async (workout: WorkoutSession) => {
     try {
+      // Check authentication status
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        return;
+      }
+
       const user = await supabase.auth.getUser();
       if (!user.data.user) {
         console.error('No authenticated user for workout save');
+        console.log('Session:', session);
         return;
       }
+
+      console.log('🔐 Saving workout for user:', user.data.user.id);
+      console.log('📊 Session status:', {
+        hasSession: !!session,
+        userId: user.data.user.id,
+        userEmail: user.data.user.email
+      });
+
+      // Test database connection with auth
+      const { error: testError } = await supabase
+        .schema('fitness')
+        .from('workouts')
+        .select('id')
+        .limit(1);
+      
+      if (testError) {
+        console.error('❌ Auth test failed:', testError);
+        return;
+      }
+      console.log('✅ Auth test passed');
+
+      console.log('📊 Workout data:', {
+        user_id: user.data.user.id,
+        date: workout.startTime.toISOString().split('T')[0],
+        start_time: workout.startTime.toISOString(),
+        end_time: workout.endTime?.toISOString(),
+        exerciseCount: workout.exercises.length
+      });
 
       // 1. Create the workout record
       const { data: workoutData, error: workoutError } = await supabase
@@ -182,13 +218,9 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   }, [routineManagement, activeWorkout, workoutData]);
 
   // Start routine from template - coordinate between routine and active workout
-  const startRoutineFromTemplate = useCallback((routine: any) => {
+  const startRoutineFromTemplate = useCallback(async (routine: any) => {
     const workoutExercises = routineManagement.createWorkoutFromRoutine(routine);
-    activeWorkout.setCurrentWorkoutExercises(workoutExercises);
-    activeWorkout.setActiveWorkoutVisible(true);
-    // Set workout start time and other initialization
-    const startTime = new Date();
-    // This would need to be implemented in the hook
+    await activeWorkout.startWorkoutFromRoutine(workoutExercises);
   }, [routineManagement, activeWorkout]);
 
   // Show routine options
@@ -307,7 +339,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
               onShowFolderOptions={showFolderOptions}
               onShowRoutineOptions={showRoutineOptions}
               onStartRoutineFromTemplate={startRoutineFromTemplate}
-              onEditRoutine={(routine) => {
+              onEditRoutine={() => {
                 // Implementation would go here
               }}
             />

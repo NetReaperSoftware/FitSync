@@ -61,82 +61,72 @@ export default function ActiveWorkoutModal({
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const [swipedRows, setSwipedRows] = useState<Set<string>>(new Set());
-  const [statsUpdateTrigger, setStatsUpdateTrigger] = useState(0);
 
-  // Use refs to avoid re-creating stats component on every exercise change
-  const exercisesRef = React.useRef(exercises);
-  const workoutStartTimeRef = React.useRef(workoutStartTime);
-  const totalPausedDurationRef = React.useRef(totalPausedDuration);
+  // Isolated Timer Component that doesn't affect parent re-renders
+  const IsolatedTimerDisplay = React.memo(({ 
+    startTime, 
+    pausedDuration 
+  }: { 
+    startTime: Date | null; 
+    pausedDuration: number; 
+  }) => {
+    const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Update refs when props change
-  React.useEffect(() => {
-    exercisesRef.current = exercises;
-  }, [exercises]);
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setCurrentTime(new Date());
+      }, 1000);
 
-  React.useEffect(() => {
-    workoutStartTimeRef.current = workoutStartTime;
-  }, [workoutStartTime]);
+      return () => clearInterval(interval);
+    }, []);
 
-  React.useEffect(() => {
-    totalPausedDurationRef.current = totalPausedDuration;
-  }, [totalPausedDuration]);
+    const formatDuration = (seconds: number) => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const remainingSeconds = seconds % 60;
+      
+      if (hours > 0) {
+        return `${hours}h ${minutes}m ${remainingSeconds}s`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${remainingSeconds}s`;
+      } else {
+        return `${remainingSeconds}s`;
+      }
+    };
 
+    const durationInSeconds = startTime ? 
+      Math.floor((currentTime.getTime() - startTime.getTime() - pausedDuration) / 1000) : 0;
 
-  // Update stats display every second without causing main component re-render
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStatsUpdateTrigger(prev => prev + 1);
-    }, 1000);
+    return (
+      <Text style={styles.statValue}>{formatDuration(durationInSeconds)}</Text>
+    );
+  });
 
-    return () => clearInterval(interval);
-  }, []);
-
+  // Static stats calculation that only updates when exercises change
   const getWorkoutStats = React.useCallback(() => {
-    // Use refs to get current values without triggering re-renders
-    const currentExercises = exercisesRef.current;
-    const currentStartTime = workoutStartTimeRef.current;
-    const currentPausedDuration = totalPausedDurationRef.current;
-    
-    // Only count completed sets for volume and total sets
-    const completedSets = currentExercises.reduce((total, exercise) => 
+    const completedSets = exercises.reduce((total, exercise) => 
       total + exercise.sets.filter(set => set.completed).length, 0
     );
-    const totalVolume = currentExercises.reduce((total, exercise) => 
+    const totalVolume = exercises.reduce((total, exercise) => 
       total + exercise.sets
         .filter(set => set.completed)
         .reduce((setTotal, set) => setTotal + (set.weight * set.reps), 0), 0
     );
     
-    // Calculate duration excluding paused time - computed fresh each time
-    const currentTime = new Date();
-    const durationInSeconds = currentStartTime ? 
-      Math.floor((currentTime.getTime() - currentStartTime.getTime() - currentPausedDuration) / 1000) : 0;
-    
-    return { completedSets, totalVolume, durationInSeconds };
-  }, []); // Empty dependency array since we use refs
+    return { completedSets, totalVolume };
+  }, [exercises]);
 
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${remainingSeconds}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    } else {
-      return `${remainingSeconds}s`;
-    }
-  };
-
-  // Memoized stats component to isolate timer updates - now only depends on timer trigger
+  // Memoized stats component with isolated timer
   const WorkoutStatsDisplay = React.useMemo(() => {
     const stats = getWorkoutStats();
     
     return (
       <View style={styles.workoutStats}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{formatDuration(stats.durationInSeconds)}</Text>
+          <IsolatedTimerDisplay 
+            startTime={workoutStartTime}
+            pausedDuration={totalPausedDuration}
+          />
           <Text style={styles.statLabel}>Duration</Text>
         </View>
         <View style={styles.statItem}>
@@ -149,7 +139,7 @@ export default function ActiveWorkoutModal({
         </View>
       </View>
     );
-  }, [statsUpdateTrigger, getWorkoutStats]); // Only depends on timer trigger and getWorkoutStats callback
+  }, [workoutStartTime, totalPausedDuration, getWorkoutStats]);
 
   const handleBackgroundPress = () => {
     // Clear all swiped rows
@@ -159,7 +149,7 @@ export default function ActiveWorkoutModal({
     Keyboard.dismiss();
   };
 
-  // SwipeableSetRow Component for Active Workout - Memoized to prevent re-renders during timer updates
+  // SwipeableSetRow Component for Active Workout - Completely isolated from timer updates
   const SwipeableSetRow = React.memo(({ exercise, set, setIndex }: {
     exercise: Exercise;
     set: ExerciseSet;
@@ -170,39 +160,45 @@ export default function ActiveWorkoutModal({
     const rowId = `${exercise.id}-${setIndex}`;
     const isSwipedOpen = swipedRows.has(rowId);
 
-    // Local state for TextInput values to prevent re-render issues
-    const [localWeight, setLocalWeight] = useState(set.weight.toString());
-    const [localReps, setLocalReps] = useState(set.reps.toString());
+    // Completely local state for TextInput values - no automatic syncing
+    const [localWeight, setLocalWeight] = useState(set.weight?.toString() || '0');
+    const [localReps, setLocalReps] = useState(set.reps?.toString() || '0');
+    
+    // Track the last known external values to detect real changes
+    const lastExternalWeight = React.useRef(set.weight);
+    const lastExternalReps = React.useRef(set.reps);
 
-    // Sync local state when external set data changes
-    useEffect(() => {
-      setLocalWeight(set.weight.toString());
-      setLocalReps(set.reps.toString());
-    }, [set.weight, set.reps]);
+    // Only sync when external values actually change (not from our own updates)
+    React.useEffect(() => {
+      if (set.weight !== lastExternalWeight.current) {
+        setLocalWeight(set.weight?.toString() || '0');
+        lastExternalWeight.current = set.weight;
+      }
+    }, [set.weight]);
+
+    React.useEffect(() => {
+      if (set.reps !== lastExternalReps.current) {
+        setLocalReps(set.reps?.toString() || '0');
+        lastExternalReps.current = set.reps;
+      }
+    }, [set.reps]);
 
     // Handle syncing local state back to parent on blur
-    const handleWeightBlur = () => {
+    const handleWeightBlur = React.useCallback(() => {
       const numericWeight = parseFloat(localWeight) || 0;
-      if (numericWeight !== set.weight) {
-        onUpdateSet(exercise.id, set.id, 'weight', numericWeight);
-      }
-    };
+      lastExternalWeight.current = numericWeight;
+      onUpdateSet(exercise.id, set.id, 'weight', numericWeight);
+    }, [localWeight, exercise.id, set.id, onUpdateSet]);
 
-    const handleRepsBlur = () => {
+    const handleRepsBlur = React.useCallback(() => {
       const numericReps = parseInt(localReps) || 0;
-      if (numericReps !== set.reps) {
-        onUpdateSet(exercise.id, set.id, 'reps', numericReps);
-      }
-    };
+      lastExternalReps.current = numericReps;
+      onUpdateSet(exercise.id, set.id, 'reps', numericReps);
+    }, [localReps, exercise.id, set.id, onUpdateSet]);
 
     // Refs for focus management
     const weightInputRef = React.useRef<TextInput>(null);
     const repsInputRef = React.useRef<TextInput>(null);
-
-    // Update local state when set values change from external sources
-    React.useEffect(() => {
-      setLocalWeight(set.weight.toString());
-    }, [set.weight]);
 
 
     const panResponder = PanResponder.create({
@@ -350,30 +346,22 @@ export default function ActiveWorkoutModal({
               style={styles.setInput}
               value={localWeight}
               placeholder="0"
+              placeholderTextColor={theme.textMuted}
               keyboardType="numeric"
               onChangeText={setLocalWeight}
               onBlur={handleWeightBlur}
               selectTextOnFocus={true}
-              returnKeyType="next"
-              onSubmitEditing={() => {
-                handleWeightBlur();
-                repsInputRef.current?.focus();
-              }}
             />
             <TextInput
               ref={repsInputRef}
               style={styles.setInput}
               value={localReps}
               placeholder="0"
+              placeholderTextColor={theme.textMuted}
               keyboardType="numeric"
               onChangeText={setLocalReps}
               onBlur={handleRepsBlur}
               selectTextOnFocus={true}
-              returnKeyType="done"
-              onSubmitEditing={() => {
-                handleRepsBlur();
-                Keyboard.dismiss();
-              }}
             />
             <TouchableOpacity
               style={[
@@ -391,17 +379,16 @@ export default function ActiveWorkoutModal({
       </View>
     );
   }, (prevProps, nextProps) => {
-    // With local state for inputs, we mainly care about completion status and IDs
-    // The weight/reps comparison is less critical since they're managed locally
-    return (
+    // Only re-render if essential props change - ignore weight/reps changes as they're handled locally
+    const shouldNotRerender = (
       prevProps.set.id === nextProps.set.id &&
       prevProps.set.completed === nextProps.set.completed &&
       prevProps.exercise.id === nextProps.exercise.id &&
-      prevProps.setIndex === nextProps.setIndex &&
-      // Still compare weight/reps for external changes (like loading from storage)
-      prevProps.set.weight === nextProps.set.weight &&
-      prevProps.set.reps === nextProps.set.reps
+      prevProps.exercise.name === nextProps.exercise.name &&
+      prevProps.setIndex === nextProps.setIndex
     );
+    
+    return shouldNotRerender;
   });
 
   return (
@@ -459,7 +446,7 @@ export default function ActiveWorkoutModal({
                   
                   {exercise.sets.map((set, index) => (
                     <SwipeableSetRow
-                      key={set.id}
+                      key={`${exercise.id}-${set.id}-${index}`}
                       exercise={exercise}
                       set={set}
                       setIndex={index}

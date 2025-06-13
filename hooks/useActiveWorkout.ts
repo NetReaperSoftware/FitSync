@@ -78,6 +78,31 @@ export const useActiveWorkout = () => {
     await workoutStorageService.saveActiveWorkout(initialWorkout);
   }, []);
 
+  // Start workout from routine template
+  const startWorkoutFromRoutine = useCallback(async (routineExercises: Exercise[]) => {
+    const workoutId = workoutStorageService.generateWorkoutId();
+    const startTime = new Date();
+    
+    setCurrentWorkoutId(workoutId);
+    setActiveWorkoutVisible(true);
+    setWorkoutStartTime(startTime);
+    setCurrentWorkoutExercises(routineExercises);
+    setIsWorkoutMinimized(false);
+    setWorkoutPauseTime(null);
+    setTotalPausedDuration(0);
+
+    // Save initial workout to storage
+    const initialWorkout: WorkoutSession = {
+      id: workoutId,
+      startTime,
+      exercises: routineExercises,
+      totalPausedDuration: 0,
+      status: 'active'
+    };
+    
+    await workoutStorageService.saveActiveWorkout(initialWorkout);
+  }, []);
+
   // Minimize workout
   const minimizeWorkout = useCallback(() => {
     setIsWorkoutMinimized(true);
@@ -287,6 +312,7 @@ export const useActiveWorkout = () => {
     // Actions
     restoreActiveWorkout,
     startNewWorkout,
+    startWorkoutFromRoutine,
     minimizeWorkout,
     restoreWorkout,
     addExerciseToWorkout,
