@@ -210,48 +210,89 @@ export default function ActiveWorkoutModal({
       .activeOffsetX([-10, 10])
       .failOffsetY([-5, 5])
       .onUpdate((event) => {
-        // Only allow left swipe and limit to -80
-        if (event.translationX < 0) {
-          translateX.setValue(Math.max(event.translationX, -80));
-        }
+        const currentlyOpen = swipedRows.has(rowId);
         
-        // Show delete button when swiping
-        if (event.translationX < -10) {
-          deleteOpacity.setValue(1);
+        if (currentlyOpen) {
+          // If already open, allow both left and right swipes
+          if (event.translationX > 0) {
+            // Right swipe to close - start from -80 position
+            translateX.setValue(Math.min(-80 + event.translationX, 0));
+          } else {
+            // Left swipe when already open - keep at -80
+            translateX.setValue(-80);
+          }
+        } else {
+          // If not open, only allow left swipe to open
+          if (event.translationX < 0) {
+            translateX.setValue(Math.max(event.translationX, -80));
+            // Show delete button when swiping left
+            if (event.translationX < -10) {
+              deleteOpacity.setValue(1);
+            }
+          }
         }
       })
       .onEnd((event) => {
-        // Determine if we should show delete or snap back
-        const shouldShowDelete = event.translationX < -40 || (event.translationX < -20 && event.velocityX < -500);
+        const currentlyOpen = swipedRows.has(rowId);
         
-        if (shouldShowDelete) {
-          // Show delete button and keep it visible
-          Animated.spring(translateX, {
-            toValue: -80,
-            useNativeDriver: true,
-            damping: 20,
-            stiffness: 300,
-          }).start();
-          setSwipedRows(prev => new Set([...prev, rowId]));
-          deleteOpacity.setValue(1); // Keep delete button visible
+        if (currentlyOpen) {
+          // If already open, check if user wants to close with right swipe
+          if (event.translationX > 40 || (event.translationX > 20 && event.velocityX > 500)) {
+            // Close the swipe
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            Animated.timing(deleteOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }).start();
+            setSwipedRows(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(rowId);
+              return newSet;
+            });
+          } else {
+            // Keep it open
+            Animated.spring(translateX, {
+              toValue: -80,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            deleteOpacity.setValue(1);
+          }
         } else {
-          // Snap back
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            damping: 20,
-            stiffness: 300,
-          }).start();
-          Animated.timing(deleteOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
-          setSwipedRows(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(rowId);
-            return newSet;
-          });
+          // If not open, check if user wants to open with left swipe
+          const shouldShowDelete = event.translationX < -40 || (event.translationX < -20 && event.velocityX < -500);
+          
+          if (shouldShowDelete) {
+            // Open the swipe and keep it visible
+            Animated.spring(translateX, {
+              toValue: -80,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            setSwipedRows(prev => new Set([...prev, rowId]));
+            deleteOpacity.setValue(1);
+          } else {
+            // Snap back to closed
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              damping: 20,
+              stiffness: 300,
+            }).start();
+            Animated.timing(deleteOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }).start();
+          }
         }
       });
 
