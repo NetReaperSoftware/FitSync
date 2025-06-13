@@ -27,6 +27,7 @@ import FolderDeleteConfirmationModal from '../components/workout/FolderDeleteCon
 import RoutineDeleteConfirmationModal from '../components/workout/RoutineDeleteConfirmationModal';
 import OptionsBottomSheet from '../components/workout/OptionsBottomSheet';
 import RoutinesList from '../components/workout/RoutinesList';
+import BottomWorkoutProgressBar from '../components/workout/BottomWorkoutProgressBar';
 import ExerciseSelectionScreen from './ExerciseSelectionScreen';
 
 // Import services
@@ -295,18 +296,6 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           <View style={styles.content}>
             <Text style={styles.header}>Workouts</Text>
             
-            {/* Minimized Active Workout Indicator */}
-            {activeWorkout.isWorkoutMinimized && (
-              <TouchableOpacity
-                style={styles.minimizedWorkoutBar}
-                onPress={activeWorkout.restoreWorkout}
-              >
-                <Text style={styles.minimizedWorkoutText}>
-                  Workout Paused - Tap to Resume
-                </Text>
-              </TouchableOpacity>
-            )}
-            
             {/* New Workout Button */}
             <TouchableOpacity
               style={styles.newWorkoutButton}
@@ -449,6 +438,13 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
             routineManagement.setDeletingRoutineId(null);
           }}
         />
+
+        {/* Bottom Workout Progress Bar */}
+        <BottomWorkoutProgressBar
+          visible={activeWorkout.isWorkoutMinimized}
+          onResume={activeWorkout.restoreWorkout}
+          onDiscard={activeWorkout.discardWorkout}
+        />
       </View>
     </SafeAreaView>
   );
@@ -474,18 +470,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginVertical: 16,
     color: theme.text,
     textAlign: 'center',
-  },
-  minimizedWorkoutBar: {
-    backgroundColor: theme.primary,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  minimizedWorkoutText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
   },
   newWorkoutButton: {
     backgroundColor: theme.primary,

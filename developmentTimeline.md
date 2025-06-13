@@ -77,7 +77,7 @@ Originally, must allow:
 - Set up the tables for user routines
 - workout_exercises table contains 
 
-# Step 4: Implement DB tracking for workout data
+# Step 4: Implement DB tracking for workout data //Completed
 When completing an active workout, be it from a routine or from a new workout, the database needs to be updated to hold the users workout information, including the exercises completed, their sets, reps, and weight values.
 
 # Notes
@@ -85,5 +85,7 @@ When completing an active workout, be it from a routine or from a new workout, t
 - Maybe have a default section for users to chose an import 
 - ScrollView is very buggy throughout Workout Sceen, sometimes scrolls, sometimes doesnt
 
-# 4a
-Implement a
+# Step 5
+
+# Future Developments
+- Update all screens to use react-native-gesture-handler and KeyboardAvoidingView to update and make more efficient

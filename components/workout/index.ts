@@ -8,3 +8,4 @@ export { default as FolderRenameModal } from './FolderRenameModal';
 export { default as OptionsBottomSheet } from './OptionsBottomSheet';
 export { default as RoutinesList } from './RoutinesList';
 export { default as WorkoutHistory } from './WorkoutHistory';
+export { default as BottomWorkoutProgressBar } from './BottomWorkoutProgressBar';
