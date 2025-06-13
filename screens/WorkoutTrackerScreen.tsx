@@ -197,7 +197,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       {
         text: 'Edit Routine',
         onPress: async () => {
-          // Implementation would go here
+          routineManagement.startEditingRoutine(routine);
         }
       },
       {

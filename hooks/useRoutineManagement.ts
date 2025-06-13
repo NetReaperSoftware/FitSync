@@ -123,6 +123,16 @@ export const useRoutineManagement = () => {
     setCurrentRoutineExercises([]);
     setRoutineName('');
     setSelectedFolder(defaultFolderId);
+    setEditingRoutineId(null);
+  }, []);
+
+  // Start editing existing routine
+  const startEditingRoutine = useCallback((routine: Routine) => {
+    setEditingRoutineId(routine.id);
+    setRoutineName(routine.name);
+    setCurrentRoutineExercises([...routine.exercises]);
+    setSelectedFolder(routine.folderId);
+    setRoutineCreationVisible(true);
   }, []);
 
   // Add exercise to routine
@@ -336,36 +346,73 @@ export const useRoutineManagement = () => {
         return false;
       }
 
-      // OPTIMISTIC UPDATE: Create routine with temporary ID
-      const tempId = dataSyncService.generateTempId();
-      const newRoutine: Routine = {
-        id: tempId,
-        name: routineName.trim(),
-        exercises: currentRoutineExercises,
-        folderId: selectedFolder,
-        isDefault: false,
-        isUserOwned: true
-      };
-      
-      // Immediately update UI
-      setRoutines(prev => [...prev, newRoutine]);
-      console.log('Optimistically created routine with temp ID:', tempId);
-      
-      // Queue for background sync
-      try {
-        const syncTempId = dataSyncService.createRoutineOptimistic({
+      if (editingRoutineId) {
+        // EDITING EXISTING ROUTINE
+        console.log('Updating existing routine:', editingRoutineId);
+        
+        // OPTIMISTIC UPDATE: Update routine immediately in UI
+        setRoutines(prevRoutines => prevRoutines.map(routine =>
+          routine.id === editingRoutineId
+            ? {
+                ...routine,
+                name: routineName.trim(),
+                exercises: currentRoutineExercises,
+                folderId: selectedFolder,
+              }
+            : routine
+        ));
+        
+        // Queue for background sync (only if it's not a temp ID)
+        if (!editingRoutineId.startsWith('temp_')) {
+          try {
+            dataSyncService.updateRoutineOptimistic({
+              id: editingRoutineId,
+              name: routineName.trim(),
+              description: `Routine with ${currentRoutineExercises.length} exercises`,
+              folderId: selectedFolder,
+              exercises: currentRoutineExercises
+            });
+            console.log('💪 Routine update queued for sync:', editingRoutineId);
+          } catch (error) {
+            console.error('❌ Failed to queue routine update:', error);
+            return false;
+          }
+        }
+      } else {
+        // CREATING NEW ROUTINE
+        console.log('Creating new routine');
+        
+        // OPTIMISTIC UPDATE: Create routine with temporary ID
+        const tempId = dataSyncService.generateTempId();
+        const newRoutine: Routine = {
+          id: tempId,
           name: routineName.trim(),
-          description: `Routine with ${currentRoutineExercises.length} exercises`,
-          folderId: selectedFolder,
           exercises: currentRoutineExercises,
-          tempId: tempId
-        });
-        console.log('💪 Routine queued for sync:', routineName.trim(), 'with temp ID:', syncTempId);
-      } catch (error) {
-        console.error('❌ Failed to queue routine creation:', error);
-        // Rollback optimistic update
-        setRoutines(prevRoutines => prevRoutines.filter(r => r.id !== tempId));
-        return false;
+          folderId: selectedFolder,
+          isDefault: false,
+          isUserOwned: true
+        };
+        
+        // Immediately update UI
+        setRoutines(prev => [...prev, newRoutine]);
+        console.log('Optimistically created routine with temp ID:', tempId);
+        
+        // Queue for background sync
+        try {
+          const syncTempId = dataSyncService.createRoutineOptimistic({
+            name: routineName.trim(),
+            description: `Routine with ${currentRoutineExercises.length} exercises`,
+            folderId: selectedFolder,
+            exercises: currentRoutineExercises,
+            tempId: tempId
+          });
+          console.log('💪 Routine queued for sync:', routineName.trim(), 'with temp ID:', syncTempId);
+        } catch (error) {
+          console.error('❌ Failed to queue routine creation:', error);
+          // Rollback optimistic update
+          setRoutines(prevRoutines => prevRoutines.filter(r => r.id !== tempId));
+          return false;
+        }
       }
       
       // Reset form state
@@ -375,7 +422,7 @@ export const useRoutineManagement = () => {
       console.error('Unexpected error saving routine:', error);
       return false;
     }
-  }, [routineName, selectedFolder, currentRoutineExercises, cancelRoutineCreation]);
+  }, [routineName, selectedFolder, currentRoutineExercises, editingRoutineId, cancelRoutineCreation]);
 
   // Start renaming routine
   const startRenamingRoutine = useCallback((routineId: string, currentName: string) => {
@@ -568,6 +615,7 @@ export const useRoutineManagement = () => {
     // Actions
     fetchRoutines,
     startNewRoutine,
+    startEditingRoutine,
     addExerciseToRoutine,
     updateRoutineExerciseSet,
     addRoutineExerciseSet,
