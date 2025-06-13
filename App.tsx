@@ -15,6 +15,7 @@ import HomeScreen from './screens/HomeScreen';
 import FoodTrackerScreen from './screens/FoodTrackerScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import WorkoutTrackerScreen from './screens/WorkoutTrackerScreen';
+import CardioScreen from './screens/CardioScreen';
 
 // Type definitions
 type RootStackParamList = {
@@ -28,7 +29,7 @@ type MainTabParamList = {
   Home: undefined;
   FoodTracker: undefined;
   WorkoutTracker: undefined;
-  Profile: undefined;
+  Cardio: undefined;
   Settings: undefined;
 };
 
@@ -51,8 +52,8 @@ function MainTabNavigator(): React.JSX.Element {
             iconName = focused ? 'restaurant' : 'restaurant-outline';
           } else if (route.name === 'WorkoutTracker') {
             iconName = focused ? 'barbell' : 'barbell-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
+          } else if (route.name === 'Cardio') {
+            iconName = focused ? 'heart' : 'heart-outline';
           } else if (route.name === 'Settings') {
             iconName = focused ? 'settings' : 'settings-outline';
           }
@@ -83,11 +84,10 @@ function MainTabNavigator(): React.JSX.Element {
         component={WorkoutTrackerScreen}
         options={{ tabBarLabel: 'Workouts' }}
       />
-      {/* Profile tab placeholder - can be implemented later */}
       <Tab.Screen 
-        name="Profile" 
-        component={HomeScreen} // Using HomeScreen as a placeholder
-        options={{ tabBarLabel: 'Profile' }}
+        name="Cardio" 
+        component={CardioScreen}
+        options={{ tabBarLabel: 'Cardio' }}
       />
       <Tab.Screen 
         name="Settings" 

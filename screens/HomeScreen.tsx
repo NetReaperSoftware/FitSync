@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function HomeScreen(): React.JSX.Element {
   const { theme } = useTheme();
   const [showDetailedReport, setShowDetailedReport] = useState(false);
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('Last 30 days');
+  const [showProfileModal, setShowProfileModal] = useState(false);
   
   // Mock data - would be replaced with actual data from a backend/state management
   const [userData] = useState({
@@ -58,12 +60,20 @@ export default function HomeScreen(): React.JSX.Element {
         <View style={styles.container}>
           <View style={styles.headerContainer}>
             <Text style={styles.header}>Daily Overview</Text>
-            <TouchableOpacity 
-              style={styles.detailedReportButton}
-              onPress={() => setShowDetailedReport(true)}
-            >
-              <Text style={styles.detailedReportButtonText}>Detailed Report</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity 
+                style={styles.detailedReportButton}
+                onPress={() => setShowDetailedReport(true)}
+              >
+                <Text style={styles.detailedReportButtonText}>Detailed Report</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.profileButton}
+                onPress={() => setShowProfileModal(true)}
+              >
+                <Ionicons name="person-circle" size={32} color={theme.primary} />
+              </TouchableOpacity>
+            </View>
           </View>
         
         {/* Goal Description Header */}
@@ -269,6 +279,75 @@ export default function HomeScreen(): React.JSX.Element {
         </ScrollView>
       </SafeAreaView>
     </Modal>
+
+    {/* Profile Modal */}
+    <Modal
+      visible={showProfileModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Profile</Text>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setShowProfileModal(false)}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.profileContent}>
+          <View style={styles.profileSection}>
+            <View style={styles.profileImageContainer}>
+              <Ionicons name="person-circle" size={80} color={theme.primary} />
+            </View>
+            <Text style={styles.profileName}>John Doe</Text>
+            <Text style={styles.profileEmail}>john.doe@example.com</Text>
+          </View>
+
+          <View style={styles.profileCard}>
+            <Text style={styles.profileCardTitle}>Personal Information</Text>
+            <View style={styles.profileInfoRow}>
+              <Text style={styles.profileInfoLabel}>Age:</Text>
+              <Text style={styles.profileInfoValue}>28 years</Text>
+            </View>
+            <View style={styles.profileInfoRow}>
+              <Text style={styles.profileInfoLabel}>Height:</Text>
+              <Text style={styles.profileInfoValue}>175 cm</Text>
+            </View>
+            <View style={styles.profileInfoRow}>
+              <Text style={styles.profileInfoLabel}>Weight:</Text>
+              <Text style={styles.profileInfoValue}>75 kg</Text>
+            </View>
+            <View style={styles.profileInfoRow}>
+              <Text style={styles.profileInfoLabel}>Goal:</Text>
+              <Text style={styles.profileInfoValue}>Weight Loss</Text>
+            </View>
+          </View>
+
+          <View style={styles.profileCard}>
+            <Text style={styles.profileCardTitle}>Fitness Goals</Text>
+            <View style={styles.profileInfoRow}>
+              <Text style={styles.profileInfoLabel}>Daily Calories:</Text>
+              <Text style={styles.profileInfoValue}>2000 kcal</Text>
+            </View>
+            <View style={styles.profileInfoRow}>
+              <Text style={styles.profileInfoLabel}>Daily Steps:</Text>
+              <Text style={styles.profileInfoValue}>10,000 steps</Text>
+            </View>
+            <View style={styles.profileInfoRow}>
+              <Text style={styles.profileInfoLabel}>Weekly Workouts:</Text>
+              <Text style={styles.profileInfoValue}>5 sessions</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.editProfileButton}>
+            <Text style={styles.editProfileButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
     </SafeAreaView>
   );
 }
@@ -453,6 +532,14 @@ const createStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  profileButton: {
+    padding: 4,
+  },
   detailedReportButton: {
     backgroundColor: theme.primary,
     paddingHorizontal: 16,
@@ -557,5 +644,67 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 14,
     color: theme.text,
     marginVertical: 2,
+  },
+  profileContent: {
+    flex: 1,
+    padding: 16,
+  },
+  profileSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  profileImageContainer: {
+    marginBottom: 16,
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.text,
+    marginBottom: 4,
+  },
+  profileEmail: {
+    fontSize: 16,
+    color: theme.textSecondary,
+  },
+  profileCard: {
+    backgroundColor: theme.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.borderLight,
+  },
+  profileCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.text,
+    marginBottom: 12,
+  },
+  profileInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  profileInfoLabel: {
+    fontSize: 16,
+    color: theme.textSecondary,
+  },
+  profileInfoValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.text,
+  },
+  editProfileButton: {
+    backgroundColor: theme.primary,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  editProfileButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
