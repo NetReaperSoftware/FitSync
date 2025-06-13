@@ -256,7 +256,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
             ...option,
             onPress: async () => {
               // Start new routine creation with this folder pre-selected
-              routineManagement.startNewRoutine(folder.id);
+              routineManagement.startNewRoutine(folder.id, folderManagement.folders);
             }
           };
         } else if (option.text === 'Delete Folder') {
@@ -334,7 +334,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
               folders={folderManagement.folders}
               collapsedFolders={folderManagement.collapsedFolders}
               onCreateFolder={() => folderManagement.setFolderCreationVisible(true)}
-              onStartNewRoutine={() => routineManagement.startNewRoutine()}
+              onStartNewRoutine={() => routineManagement.startNewRoutine(undefined, folderManagement.folders)}
               onToggleFolderCollapse={folderManagement.toggleFolderCollapse}
               onShowFolderOptions={showFolderOptions}
               onShowRoutineOptions={showRoutineOptions}

@@ -118,11 +118,19 @@ export const useRoutineManagement = () => {
   }, []);
 
   // Start new routine creation
-  const startNewRoutine = useCallback((defaultFolderId?: string) => {
+  const startNewRoutine = useCallback((defaultFolderId?: string, folders?: any[]) => {
     setRoutineCreationVisible(true);
     setCurrentRoutineExercises([]);
     setRoutineName('');
-    setSelectedFolder(defaultFolderId);
+    
+    // If no folder is specified, try to find and select "My Routines" as default
+    if (!defaultFolderId && folders) {
+      const myRoutinesFolder = folders.find(folder => folder.name === 'My Routines');
+      setSelectedFolder(myRoutinesFolder?.id);
+    } else {
+      setSelectedFolder(defaultFolderId);
+    }
+    
     setEditingRoutineId(null);
   }, []);
 
