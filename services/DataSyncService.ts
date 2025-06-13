@@ -258,6 +258,7 @@ class DataSyncService {
     try {
       console.log('📝 Starting database update for routine:', routineData.id, 'New name:', routineData.name);
       
+      // 1. Update routine basic info
       const { error: routineError } = await supabase
         .schema('fitness')
         .from('workout_routines')
@@ -272,7 +273,54 @@ class DataSyncService {
         return { success: false, error: routineError.message };
       }
 
-      console.log('✅ Successfully updated routine in database');
+      console.log('✅ Updated routine basic info in database');
+
+      // 2. Update routine exercises if provided
+      if (routineData.exercises && routineData.exercises.length > 0) {
+        console.log('Updating routine exercises for', routineData.exercises.length, 'exercises');
+        
+        // Delete existing routine exercises
+        const { error: deleteError } = await supabase
+          .schema('fitness')
+          .from('workout_routine_exercises')
+          .delete()
+          .eq('routine_id', routineData.id);
+
+        if (deleteError) {
+          console.error('Failed to delete old routine exercises:', deleteError);
+          return { success: false, error: deleteError.message };
+        }
+
+        // Insert updated routine exercises
+        const routineExercises: any[] = [];
+        routineData.exercises.forEach((exercise: any, exerciseIndex: number) => {
+          exercise.sets.forEach((set: any, setIndex: number) => {
+            routineExercises.push({
+              routine_id: routineData.id,
+              exercise_id: exercise.id,
+              sets: 1,
+              reps: set.reps || 0,
+              weight_lbs: set.weight || 0,
+              order_in_routine: exerciseIndex + 1,
+              set_number: setIndex + 1
+            });
+          });
+        });
+
+        console.log('Inserting', routineExercises.length, 'updated routine exercises');
+        const { error: exercisesError } = await supabase
+          .schema('fitness')
+          .from('workout_routine_exercises')
+          .insert(routineExercises);
+
+        if (exercisesError) {
+          console.error('Failed to update routine exercises:', exercisesError);
+          return { success: false, error: exercisesError.message };
+        }
+        
+        console.log('✅ Updated routine exercises successfully');
+      }
+
       return { success: true };
     } catch (error) {
       console.error('Unexpected error in syncUpdateRoutine:', error);

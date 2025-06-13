@@ -134,6 +134,16 @@ export default function RoutineCreationModal({
     const deleteOpacity = React.useRef(new Animated.Value(0)).current;
     const rowId = `${exerciseIndex}-${setIndex}`;
     const isSwipedOpen = swipedRows.has(rowId);
+    
+    // Local state for TextInputs to prevent focus loss
+    const [localWeight, setLocalWeight] = useState(set.weight?.toString() || '0');
+    const [localReps, setLocalReps] = useState(set.reps?.toString() || '0');
+    
+    // Update local state when set data changes (e.g., when editing different routine)
+    React.useEffect(() => {
+      setLocalWeight(set.weight?.toString() || '0');
+      setLocalReps(set.reps?.toString() || '0');
+    }, [set.weight, set.reps]);
     const [isSwiping, setIsSwiping] = useState(false);
 
     const panResponder = PanResponder.create({
@@ -256,16 +266,24 @@ export default function RoutineCreationModal({
               <Text style={styles.setNumber}>{setIndex + 1}</Text>
               <TextInput
                 style={styles.tableInput}
-                value={set.weight?.toString() || '0'}
-                onChangeText={(value) => onUpdateExerciseSet(exerciseIndex, setIndex, 'weight', parseFloat(value) || 0)}
+                value={localWeight}
+                onChangeText={setLocalWeight}
+                onBlur={() => {
+                  const weightValue = parseFloat(localWeight) || 0;
+                  onUpdateExerciseSet(exerciseIndex, setIndex, 'weight', weightValue);
+                }}
                 keyboardType="numeric"
                 placeholder="0"
                 placeholderTextColor={theme.textMuted}
               />
               <TextInput
                 style={styles.tableInput}
-                value={set.reps?.toString() || '0'}
-                onChangeText={(value) => onUpdateExerciseSet(exerciseIndex, setIndex, 'reps', parseInt(value) || 0)}
+                value={localReps}
+                onChangeText={setLocalReps}
+                onBlur={() => {
+                  const repsValue = parseInt(localReps) || 0;
+                  onUpdateExerciseSet(exerciseIndex, setIndex, 'reps', repsValue);
+                }}
                 keyboardType="numeric"
                 placeholder="0"
                 placeholderTextColor={theme.textMuted}
