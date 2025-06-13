@@ -1,4 +1,5 @@
 export { default as ActiveWorkoutModal } from './ActiveWorkoutModal';
+export { default as WorkoutOverviewModal } from './WorkoutOverviewModal';
 export { default as RoutineCreationModal } from './RoutineCreationModal';
 export { default as ExerciseSelectionModal } from './ExerciseSelectionModal';
 export { default as ExerciseReorderModal } from './ExerciseReorderModal';

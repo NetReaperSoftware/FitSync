@@ -23,6 +23,7 @@ export type WorkoutSession = {
   exercises: WorkoutExercise[];
   totalPausedDuration: number;
   status: 'active' | 'completed' | 'discarded';
+  notes?: string;
 };
 
 const ACTIVE_WORKOUT_KEY = 'active_workout';

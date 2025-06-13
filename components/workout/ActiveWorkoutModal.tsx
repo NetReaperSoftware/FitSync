@@ -1,18 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
-  ScrollView,
   Modal,
   TextInput,
   SafeAreaView,
   Animated,
-  PanResponder,
   TouchableWithoutFeedback,
-  Keyboard
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
+import {
+  ScrollView,
+  Gesture,
+  GestureDetector,
+} from 'react-native-gesture-handler';
 import { useTheme } from '../../contexts/ThemeContext';
 
 type ExerciseSet = {
@@ -201,65 +206,41 @@ export default function ActiveWorkoutModal({
     const repsInputRef = React.useRef<TextInput>(null);
 
 
-    const panResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => false, // Don't capture initial touch
-      onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // Only respond to horizontal swipes that are clearly intended for swiping
-        // And only if the touch is not on a TextInput area
-        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 15;
-        
-        if (!isHorizontalSwipe) return false;
-        
-        // Get the touch position relative to the row
-        const { locationX } = evt.nativeEvent;
-        
-        // Approximate TextInput areas (weight and reps inputs are in the middle portion)
-        // Set number is ~25% width, weight input ~25% width, reps input ~25% width, checkbox ~25% width
-        const rowWidth = 300; // Approximate row width
-        const setNumberEnd = rowWidth * 0.25;
-        const weightInputStart = setNumberEnd;
-        const weightInputEnd = rowWidth * 0.5;
-        const repsInputStart = weightInputEnd;
-        const repsInputEnd = rowWidth * 0.75;
-        
-        // Don't start pan gesture if touch is in TextInput areas
-        const isTouchInTextInput = (locationX >= weightInputStart && locationX <= weightInputEnd) ||
-                                  (locationX >= repsInputStart && locationX <= repsInputEnd);
-        
-        return !isTouchInTextInput;
-      },
-      onPanResponderGrant: () => {
-        // Show delete button when swipe starts
-        Animated.timing(deleteOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) { // Only allow left swipe
-          translateX.setValue(Math.max(gestureState.dx, -80));
+    const panGesture = Gesture.Pan()
+      .activeOffsetX([-10, 10])
+      .failOffsetY([-5, 5])
+      .onUpdate((event) => {
+        // Only allow left swipe and limit to -80
+        if (event.translationX < 0) {
+          translateX.setValue(Math.max(event.translationX, -80));
         }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -40) {
-          // Swipe left - show delete button
+        
+        // Show delete button when swiping
+        if (event.translationX < -10) {
+          deleteOpacity.setValue(1);
+        }
+      })
+      .onEnd((event) => {
+        // Determine if we should show delete or snap back
+        const shouldShowDelete = event.translationX < -40 || (event.translationX < -20 && event.velocityX < -500);
+        
+        if (shouldShowDelete) {
+          // Show delete button and keep it visible
           Animated.spring(translateX, {
             toValue: -80,
             useNativeDriver: true,
+            damping: 20,
+            stiffness: 300,
           }).start();
           setSwipedRows(prev => new Set([...prev, rowId]));
-          // Keep delete button visible
-          Animated.timing(deleteOpacity, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
+          deleteOpacity.setValue(1); // Keep delete button visible
         } else {
-          // Snap back and hide delete button
+          // Snap back
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
+            damping: 20,
+            stiffness: 300,
           }).start();
           Animated.timing(deleteOpacity, {
             toValue: 0,
@@ -272,8 +253,12 @@ export default function ActiveWorkoutModal({
             return newSet;
           });
         }
-      },
-    });
+      });
+
+    const tapGesture = Gesture.Tap()
+      .onEnd(() => {
+        handleTap();
+      });
 
     // Function to close swipe from outside
     React.useEffect(() => {
@@ -329,53 +314,58 @@ export default function ActiveWorkoutModal({
           </TouchableOpacity>
         </Animated.View>
         
-        <Animated.View
-          style={[
-            styles.setRow,
-            { transform: [{ translateX }] }
-          ]}
-        >
-          <View style={styles.setRowContent} {...panResponder.panHandlers}>
-            <TouchableWithoutFeedback onPress={handleTap}>
+        <GestureDetector gesture={Gesture.Simultaneous(panGesture, tapGesture)}>
+          <Animated.View
+            style={[
+              styles.setRow,
+              { transform: [{ translateX }] }
+            ]}
+          >
+            <View style={styles.setRowContent}>
+              {/* Set number */}
               <View style={styles.setNumberContainer}>
                 <Text style={styles.setText}>{setIndex + 1}</Text>
               </View>
-            </TouchableWithoutFeedback>
-            <TextInput
-              ref={weightInputRef}
-              style={styles.setInput}
-              value={localWeight}
-              placeholder="0"
-              placeholderTextColor={theme.textMuted}
-              keyboardType="numeric"
-              onChangeText={setLocalWeight}
-              onBlur={handleWeightBlur}
-              selectTextOnFocus={true}
-            />
-            <TextInput
-              ref={repsInputRef}
-              style={styles.setInput}
-              value={localReps}
-              placeholder="0"
-              placeholderTextColor={theme.textMuted}
-              keyboardType="numeric"
-              onChangeText={setLocalReps}
-              onBlur={handleRepsBlur}
-              selectTextOnFocus={true}
-            />
-            <TouchableOpacity
-              style={[
-                styles.checkboxButton,
-                set.completed ? styles.checkedBox : styles.uncheckedBox,
-              ]}
-              onPress={() => onToggleSetCompletion(exercise.id, set.id)}
-            >
-              {set.completed && (
-                <Text style={styles.checkboxText}>✓</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+              
+              {/* Input areas */}
+              <TextInput
+                ref={weightInputRef}
+                style={styles.setInput}
+                value={localWeight}
+                placeholder="0"
+                placeholderTextColor={theme.textMuted}
+                keyboardType="numeric"
+                onChangeText={setLocalWeight}
+                onBlur={handleWeightBlur}
+                selectTextOnFocus={true}
+              />
+              <TextInput
+                ref={repsInputRef}
+                style={styles.setInput}
+                value={localReps}
+                placeholder="0"
+                placeholderTextColor={theme.textMuted}
+                keyboardType="numeric"
+                onChangeText={setLocalReps}
+                onBlur={handleRepsBlur}
+                selectTextOnFocus={true}
+              />
+              
+              {/* Checkbox */}
+              <TouchableOpacity
+                style={[
+                  styles.checkboxButton,
+                  set.completed ? styles.checkedBox : styles.uncheckedBox,
+                ]}
+                onPress={() => onToggleSetCompletion(exercise.id, set.id)}
+              >
+                {set.completed && (
+                  <Text style={styles.checkboxText}>✓</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </GestureDetector>
       </View>
     );
   }, (prevProps, nextProps) => {
@@ -400,8 +390,11 @@ export default function ActiveWorkoutModal({
       supportedOrientations={['portrait']}
     >
       <SafeAreaView style={styles.safeArea}>
-        <TouchableWithoutFeedback onPress={handleBackgroundPress}>
-          <View style={styles.container}>
+        <KeyboardAvoidingView 
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
           {/* Active Workout Header */}
           <View style={styles.activeWorkoutHeader}>
             <TouchableOpacity
@@ -426,10 +419,17 @@ export default function ActiveWorkoutModal({
           
           <ScrollView 
             style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+            scrollEventThrottle={16}
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+            automaticallyAdjustContentInsets={false}
           >
-            <View style={styles.content}>
+            <TouchableWithoutFeedback onPress={handleBackgroundPress}>
+              <View style={styles.content}>
               {/* Current Exercises */}
               {exercises.map(exercise => (
                 <View key={exercise.id} style={styles.workoutCard}>
@@ -477,10 +477,10 @@ export default function ActiveWorkoutModal({
               >
                 <Text style={styles.discardButtonText}>Discard Workout</Text>
               </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableWithoutFeedback>
           </ScrollView>
-          </View>
-        </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
@@ -497,8 +497,12 @@ const createStyles = (theme: any) => StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     padding: 16,
+    minHeight: '100%',
   },
   activeWorkoutHeader: {
     flexDirection: 'row',
@@ -732,5 +736,10 @@ const createStyles = (theme: any) => StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  swipeHandle: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

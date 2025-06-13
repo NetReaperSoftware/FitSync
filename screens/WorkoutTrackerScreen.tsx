@@ -18,6 +18,7 @@ import { useWorkoutData } from '../hooks/useWorkoutData';
 
 // Import components
 import ActiveWorkoutModal from '../components/workout/ActiveWorkoutModal';
+import WorkoutOverviewModal from '../components/workout/WorkoutOverviewModal';
 import RoutineCreationModal from '../components/workout/RoutineCreationModal';
 import FolderCreationModal from '../components/workout/FolderCreationModal';
 import RoutineRenameModal from '../components/workout/RoutineRenameModal';
@@ -29,8 +30,7 @@ import RoutinesList from '../components/workout/RoutinesList';
 import ExerciseSelectionScreen from './ExerciseSelectionScreen';
 
 // Import services
-import { workoutStorageService, WorkoutSession } from '../services/WorkoutStorageService';
-import { debouncedStorageService } from '../services/DebouncedStorageService';
+import { WorkoutSession } from '../services/WorkoutStorageService';
 
 export default function WorkoutTrackerScreen(): React.JSX.Element {
   const { theme } = useTheme();
@@ -91,7 +91,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         date: workout.startTime.toISOString().split('T')[0],
         start_time: workout.startTime.toISOString(),
         end_time: workout.endTime?.toISOString(),
-        exerciseCount: workout.exercises.length
+        exerciseCount: workout.exercises.length,
+        notes: workout.notes || 'No notes provided'
       });
 
       // 1. Create the workout record
@@ -103,7 +104,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           date: workout.startTime.toISOString().split('T')[0], // Date only
           start_time: workout.startTime.toISOString(),
           end_time: workout.endTime?.toISOString(),
-          notes: `Workout completed with ${workout.exercises.length} exercises`
+          notes: workout.notes || `Workout completed with ${workout.exercises.length} exercises`
         })
         .select()
         .single();
@@ -118,6 +119,12 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
       // 2. Create workout_exercises and exercise_sets
       for (let exerciseIndex = 0; exerciseIndex < workout.exercises.length; exerciseIndex++) {
         const exercise = workout.exercises[exerciseIndex];
+        
+        console.log('💪 Creating workout exercise:', {
+          exerciseName: exercise.name,
+          exerciseId: exercise.id,
+          isValidUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(exercise.id)
+        });
         
         // Create workout_exercise record
         const { data: workoutExerciseData, error: workoutExerciseError } = await supabase
@@ -165,37 +172,17 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   }, []);
 
   // Enhanced finish workout that saves to database
-  const finishWorkout = useCallback(async () => {
-    if (!activeWorkout.currentWorkoutId || !activeWorkout.workoutStartTime) return;
-
+  // Handle saving workout from overview
+  const handleSaveWorkout = useCallback(async (notes: string) => {
     try {
-      // Flush any pending debounced updates before finishing
-      await debouncedStorageService.flushPendingSaves();
-
-      // Save completed workout to storage and database
-      const completedWorkout: WorkoutSession = {
-        id: activeWorkout.currentWorkoutId,
-        startTime: activeWorkout.workoutStartTime,
-        endTime: new Date(),
-        exercises: activeWorkout.currentWorkoutExercises,
-        totalPausedDuration: activeWorkout.totalPausedDuration,
-        status: 'completed'
-      };
-
-      // Save to local storage
-      await workoutStorageService.saveCompletedWorkout(completedWorkout);
-      
-      // Clear active workout from storage
-      await workoutStorageService.clearActiveWorkout();
-      
-      // Save to database
-      await saveWorkoutToDatabase(completedWorkout);
-      console.log('Workout completed and saved:', activeWorkout.currentWorkoutId);
-      
-      // Reset active workout state
-      activeWorkout.discardWorkout();
+      const completedWorkout = await activeWorkout.saveWorkout(notes);
+      if (completedWorkout) {
+        // Save to database
+        await saveWorkoutToDatabase(completedWorkout);
+        console.log('Workout completed and saved:', completedWorkout.id);
+      }
     } catch (error) {
-      console.error('Error finishing workout:', error);
+      console.error('Error saving workout:', error);
     }
   }, [activeWorkout, saveWorkoutToDatabase]);
 
@@ -220,7 +207,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
   // Start routine from template - coordinate between routine and active workout
   const startRoutineFromTemplate = useCallback(async (routine: any) => {
     const workoutExercises = routineManagement.createWorkoutFromRoutine(routine);
-    await activeWorkout.startWorkoutFromRoutine(workoutExercises);
+    await activeWorkout.startWorkoutFromRoutine(workoutExercises, routine.name);
   }, [routineManagement, activeWorkout]);
 
   // Show routine options
@@ -352,13 +339,25 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           workoutStartTime={activeWorkout.workoutStartTime}
           totalPausedDuration={activeWorkout.totalPausedDuration}
           onMinimize={activeWorkout.minimizeWorkout}
-          onFinish={finishWorkout}
+          onFinish={activeWorkout.finishWorkout}
           onDiscard={activeWorkout.discardWorkout}
           onAddExercise={() => workoutData.setExerciseScreenVisible(true)}
           onToggleSetCompletion={activeWorkout.toggleActiveWorkoutSetCompletion}
           onUpdateSet={activeWorkout.updateActiveWorkoutSet}
           onAddSet={activeWorkout.addSetToExercise}
           onRemoveSet={activeWorkout.removeSetFromExercise}
+        />
+
+        <WorkoutOverviewModal
+          visible={activeWorkout.workoutOverviewVisible}
+          workoutName={activeWorkout.currentRoutineName || "Workout"}
+          exercises={activeWorkout.currentWorkoutExercises}
+          workoutStartTime={activeWorkout.workoutStartTime}
+          workoutEndTime={activeWorkout.workoutEndTime}
+          totalPausedDuration={activeWorkout.totalPausedDuration}
+          onSave={handleSaveWorkout}
+          onDiscard={activeWorkout.discardWorkout}
+          onCancel={activeWorkout.cancelOverview}
         />
 
         <RoutineCreationModal

@@ -585,9 +585,11 @@ export const useRoutineManagement = () => {
   const createWorkoutFromRoutine = useCallback((routine: Routine) => {
     const workoutExercises = routine.exercises.map((exercise, exerciseIndex) => ({
       ...exercise,
-      id: `e${Date.now()}-${exerciseIndex}-${Math.random().toString(36).substring(2, 7)}`,
+      // Keep the original exercise ID from database (it's already a UUID)
+      id: exercise.id,
       sets: exercise.sets.length > 0 
         ? exercise.sets.map((set, setIndex) => ({
+            // Generate new set IDs for the workout instance
             id: `s${Date.now()}-${exerciseIndex}-${setIndex}`,
             weight: set.weight || 0,
             reps: set.reps || 0,

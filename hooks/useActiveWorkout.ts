@@ -35,6 +35,9 @@ export const useActiveWorkout = () => {
   const [workoutPauseTime, setWorkoutPauseTime] = useState<Date | null>(null);
   const [totalPausedDuration, setTotalPausedDuration] = useState(0);
   const [currentWorkoutId, setCurrentWorkoutId] = useState<string | null>(null);
+  const [workoutOverviewVisible, setWorkoutOverviewVisible] = useState(false);
+  const [workoutEndTime, setWorkoutEndTime] = useState<Date | null>(null);
+  const [currentRoutineName, setCurrentRoutineName] = useState<string | null>(null);
 
   // Restore active workout from storage on app start
   const restoreActiveWorkout = useCallback(async () => {
@@ -62,6 +65,7 @@ export const useActiveWorkout = () => {
     setActiveWorkoutVisible(true);
     setWorkoutStartTime(startTime);
     setCurrentWorkoutExercises([]);
+    setCurrentRoutineName(null);
     setIsWorkoutMinimized(false);
     setWorkoutPauseTime(null);
     setTotalPausedDuration(0);
@@ -79,7 +83,7 @@ export const useActiveWorkout = () => {
   }, []);
 
   // Start workout from routine template
-  const startWorkoutFromRoutine = useCallback(async (routineExercises: Exercise[]) => {
+  const startWorkoutFromRoutine = useCallback(async (routineExercises: Exercise[], routineName?: string) => {
     const workoutId = workoutStorageService.generateWorkoutId();
     const startTime = new Date();
     
@@ -87,6 +91,7 @@ export const useActiveWorkout = () => {
     setActiveWorkoutVisible(true);
     setWorkoutStartTime(startTime);
     setCurrentWorkoutExercises(routineExercises);
+    setCurrentRoutineName(routineName || null);
     setIsWorkoutMinimized(false);
     setWorkoutPauseTime(null);
     setTotalPausedDuration(0);
@@ -277,6 +282,65 @@ export const useActiveWorkout = () => {
     }
   }, [currentWorkoutId, workoutStartTime, totalPausedDuration]);
 
+  // Finish workout (show overview)
+  const finishWorkout = useCallback(async () => {
+    const endTime = new Date();
+    setWorkoutEndTime(endTime);
+    setActiveWorkoutVisible(false);
+    setWorkoutOverviewVisible(true);
+  }, []);
+
+  // Save workout (from overview)
+  const saveWorkout = useCallback(async (notes: string) => {
+    if (!currentWorkoutId || !workoutStartTime || !workoutEndTime) return null;
+
+    try {
+      // Cancel any pending debounced updates
+      debouncedStorageService.cancelPendingSaves();
+      
+      // Create completed workout
+      const completedWorkout: WorkoutSession = {
+        id: currentWorkoutId,
+        startTime: workoutStartTime,
+        endTime: workoutEndTime,
+        exercises: currentWorkoutExercises,
+        totalPausedDuration,
+        status: 'completed',
+        notes: notes.trim() || undefined
+      };
+      
+      // Save to storage
+      await workoutStorageService.saveCompletedWorkout(completedWorkout);
+      
+      // Clear active workout from storage
+      await workoutStorageService.clearActiveWorkout();
+      
+      // Reset state
+      setActiveWorkoutVisible(false);
+      setWorkoutOverviewVisible(false);
+      setIsWorkoutMinimized(false);
+      setWorkoutStartTime(null);
+      setWorkoutEndTime(null);
+      setCurrentWorkoutExercises([]);
+      setCurrentRoutineName(null);
+      setWorkoutPauseTime(null);
+      setTotalPausedDuration(0);
+      setCurrentWorkoutId(null);
+      
+      return completedWorkout;
+    } catch (error) {
+      console.error('Error saving workout:', error);
+      return null;
+    }
+  }, [currentWorkoutId, workoutStartTime, workoutEndTime, currentWorkoutExercises, totalPausedDuration]);
+
+  // Cancel overview (go back to workout)
+  const cancelOverview = useCallback(() => {
+    setWorkoutOverviewVisible(false);
+    setActiveWorkoutVisible(true);
+    setWorkoutEndTime(null);
+  }, []);
+
   // Discard workout
   const discardWorkout = useCallback(async () => {
     try {
@@ -288,8 +352,10 @@ export const useActiveWorkout = () => {
       
       // Reset state
       setActiveWorkoutVisible(false);
+      setWorkoutOverviewVisible(false);
       setIsWorkoutMinimized(false);
       setWorkoutStartTime(null);
+      setWorkoutEndTime(null);
       setCurrentWorkoutExercises([]);
       setWorkoutPauseTime(null);
       setTotalPausedDuration(0);
@@ -304,10 +370,13 @@ export const useActiveWorkout = () => {
     activeWorkoutVisible,
     isWorkoutMinimized,
     workoutStartTime,
+    workoutEndTime,
     currentWorkoutExercises,
     workoutPauseTime,
     totalPausedDuration,
     currentWorkoutId,
+    workoutOverviewVisible,
+    currentRoutineName,
 
     // Actions
     restoreActiveWorkout,
@@ -320,6 +389,9 @@ export const useActiveWorkout = () => {
     updateActiveWorkoutSet,
     addSetToExercise,
     removeSetFromExercise,
+    finishWorkout,
+    saveWorkout,
+    cancelOverview,
     discardWorkout,
 
     // Setters (for specific use cases)
