@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,7 +10,8 @@ import {
   SafeAreaView,
   Animated,
   PanResponder,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  Keyboard
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -60,34 +61,59 @@ export default function ActiveWorkoutModal({
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const [swipedRows, setSwipedRows] = useState<Set<string>>(new Set());
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [statsUpdateTrigger, setStatsUpdateTrigger] = useState(0);
 
-  // Update current time every second for duration tracking
+  // Use refs to avoid re-creating stats component on every exercise change
+  const exercisesRef = React.useRef(exercises);
+  const workoutStartTimeRef = React.useRef(workoutStartTime);
+  const totalPausedDurationRef = React.useRef(totalPausedDuration);
+
+  // Update refs when props change
+  React.useEffect(() => {
+    exercisesRef.current = exercises;
+  }, [exercises]);
+
+  React.useEffect(() => {
+    workoutStartTimeRef.current = workoutStartTime;
+  }, [workoutStartTime]);
+
+  React.useEffect(() => {
+    totalPausedDurationRef.current = totalPausedDuration;
+  }, [totalPausedDuration]);
+
+
+  // Update stats display every second without causing main component re-render
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTime(new Date());
+      setStatsUpdateTrigger(prev => prev + 1);
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const getWorkoutStats = () => {
+  const getWorkoutStats = React.useCallback(() => {
+    // Use refs to get current values without triggering re-renders
+    const currentExercises = exercisesRef.current;
+    const currentStartTime = workoutStartTimeRef.current;
+    const currentPausedDuration = totalPausedDurationRef.current;
+    
     // Only count completed sets for volume and total sets
-    const completedSets = exercises.reduce((total, exercise) => 
+    const completedSets = currentExercises.reduce((total, exercise) => 
       total + exercise.sets.filter(set => set.completed).length, 0
     );
-    const totalVolume = exercises.reduce((total, exercise) => 
+    const totalVolume = currentExercises.reduce((total, exercise) => 
       total + exercise.sets
         .filter(set => set.completed)
         .reduce((setTotal, set) => setTotal + (set.weight * set.reps), 0), 0
     );
     
-    // Calculate duration excluding paused time
-    const durationInSeconds = workoutStartTime ? 
-      Math.floor((currentTime.getTime() - workoutStartTime.getTime() - totalPausedDuration) / 1000) : 0;
+    // Calculate duration excluding paused time - computed fresh each time
+    const currentTime = new Date();
+    const durationInSeconds = currentStartTime ? 
+      Math.floor((currentTime.getTime() - currentStartTime.getTime() - currentPausedDuration) / 1000) : 0;
     
     return { completedSets, totalVolume, durationInSeconds };
-  };
+  }, []); // Empty dependency array since we use refs
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -103,15 +129,38 @@ export default function ActiveWorkoutModal({
     }
   };
 
-  const stats = getWorkoutStats();
+  // Memoized stats component to isolate timer updates - now only depends on timer trigger
+  const WorkoutStatsDisplay = React.useMemo(() => {
+    const stats = getWorkoutStats();
+    
+    return (
+      <View style={styles.workoutStats}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{formatDuration(stats.durationInSeconds)}</Text>
+          <Text style={styles.statLabel}>Duration</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{stats.totalVolume}</Text>
+          <Text style={styles.statLabel}>Volume (lbs)</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{stats.completedSets}</Text>
+          <Text style={styles.statLabel}>Sets</Text>
+        </View>
+      </View>
+    );
+  }, [statsUpdateTrigger, getWorkoutStats]); // Only depends on timer trigger and getWorkoutStats callback
 
   const handleBackgroundPress = () => {
     // Clear all swiped rows
     setSwipedRows(new Set());
+    
+    // Dismiss keyboard when tapping outside
+    Keyboard.dismiss();
   };
 
-  // SwipeableSetRow Component for Active Workout
-  const SwipeableSetRow = ({ exercise, set, setIndex }: {
+  // SwipeableSetRow Component for Active Workout - Memoized to prevent re-renders during timer updates
+  const SwipeableSetRow = React.memo(({ exercise, set, setIndex }: {
     exercise: Exercise;
     set: ExerciseSet;
     setIndex: number;
@@ -121,9 +170,67 @@ export default function ActiveWorkoutModal({
     const rowId = `${exercise.id}-${setIndex}`;
     const isSwipedOpen = swipedRows.has(rowId);
 
+    // Local state for TextInput values to prevent re-render issues
+    const [localWeight, setLocalWeight] = useState(set.weight.toString());
+    const [localReps, setLocalReps] = useState(set.reps.toString());
+
+    // Sync local state when external set data changes
+    useEffect(() => {
+      setLocalWeight(set.weight.toString());
+      setLocalReps(set.reps.toString());
+    }, [set.weight, set.reps]);
+
+    // Handle syncing local state back to parent on blur
+    const handleWeightBlur = () => {
+      const numericWeight = parseFloat(localWeight) || 0;
+      if (numericWeight !== set.weight) {
+        onUpdateSet(exercise.id, set.id, 'weight', numericWeight);
+      }
+    };
+
+    const handleRepsBlur = () => {
+      const numericReps = parseInt(localReps) || 0;
+      if (numericReps !== set.reps) {
+        onUpdateSet(exercise.id, set.id, 'reps', numericReps);
+      }
+    };
+
+    // Refs for focus management
+    const weightInputRef = React.useRef<TextInput>(null);
+    const repsInputRef = React.useRef<TextInput>(null);
+
+    // Update local state when set values change from external sources
+    React.useEffect(() => {
+      setLocalWeight(set.weight.toString());
+    }, [set.weight]);
+
+
     const panResponder = PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+      onStartShouldSetPanResponder: () => false, // Don't capture initial touch
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only respond to horizontal swipes that are clearly intended for swiping
+        // And only if the touch is not on a TextInput area
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 15;
+        
+        if (!isHorizontalSwipe) return false;
+        
+        // Get the touch position relative to the row
+        const { locationX } = evt.nativeEvent;
+        
+        // Approximate TextInput areas (weight and reps inputs are in the middle portion)
+        // Set number is ~25% width, weight input ~25% width, reps input ~25% width, checkbox ~25% width
+        const rowWidth = 300; // Approximate row width
+        const setNumberEnd = rowWidth * 0.25;
+        const weightInputStart = setNumberEnd;
+        const weightInputEnd = rowWidth * 0.5;
+        const repsInputStart = weightInputEnd;
+        const repsInputEnd = rowWidth * 0.75;
+        
+        // Don't start pan gesture if touch is in TextInput areas
+        const isTouchInTextInput = (locationX >= weightInputStart && locationX <= weightInputEnd) ||
+                                  (locationX >= repsInputStart && locationX <= repsInputEnd);
+        
+        return !isTouchInTextInput;
       },
       onPanResponderGrant: () => {
         // Show delete button when swipe starts
@@ -231,42 +338,71 @@ export default function ActiveWorkoutModal({
             styles.setRow,
             { transform: [{ translateX }] }
           ]}
-          {...panResponder.panHandlers}
         >
-          <TouchableWithoutFeedback onPress={handleTap}>
-            <View style={styles.setRowContent}>
-              <Text style={styles.setText}>{setIndex + 1}</Text>
-              <TextInput
-                style={styles.setInput}
-                value={set.weight.toString()}
-                placeholder="0"
-                keyboardType="numeric"
-                onChangeText={(text) => onUpdateSet(exercise.id, set.id, 'weight', parseFloat(text) || 0)}
-              />
-              <TextInput
-                style={styles.setInput}
-                value={set.reps.toString()}
-                placeholder="0"
-                keyboardType="numeric"
-                onChangeText={(text) => onUpdateSet(exercise.id, set.id, 'reps', parseInt(text) || 0)}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.checkboxButton,
-                  set.completed ? styles.checkedBox : styles.uncheckedBox,
-                ]}
-                onPress={() => onToggleSetCompletion(exercise.id, set.id)}
-              >
-                {set.completed && (
-                  <Text style={styles.checkboxText}>✓</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
+          <View style={styles.setRowContent} {...panResponder.panHandlers}>
+            <TouchableWithoutFeedback onPress={handleTap}>
+              <View style={styles.setNumberContainer}>
+                <Text style={styles.setText}>{setIndex + 1}</Text>
+              </View>
+            </TouchableWithoutFeedback>
+            <TextInput
+              ref={weightInputRef}
+              style={styles.setInput}
+              value={localWeight}
+              placeholder="0"
+              keyboardType="numeric"
+              onChangeText={setLocalWeight}
+              onBlur={handleWeightBlur}
+              selectTextOnFocus={true}
+              returnKeyType="next"
+              onSubmitEditing={() => {
+                handleWeightBlur();
+                repsInputRef.current?.focus();
+              }}
+            />
+            <TextInput
+              ref={repsInputRef}
+              style={styles.setInput}
+              value={localReps}
+              placeholder="0"
+              keyboardType="numeric"
+              onChangeText={setLocalReps}
+              onBlur={handleRepsBlur}
+              selectTextOnFocus={true}
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                handleRepsBlur();
+                Keyboard.dismiss();
+              }}
+            />
+            <TouchableOpacity
+              style={[
+                styles.checkboxButton,
+                set.completed ? styles.checkedBox : styles.uncheckedBox,
+              ]}
+              onPress={() => onToggleSetCompletion(exercise.id, set.id)}
+            >
+              {set.completed && (
+                <Text style={styles.checkboxText}>✓</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </View>
     );
-  };
+  }, (prevProps, nextProps) => {
+    // With local state for inputs, we mainly care about completion status and IDs
+    // The weight/reps comparison is less critical since they're managed locally
+    return (
+      prevProps.set.id === nextProps.set.id &&
+      prevProps.set.completed === nextProps.set.completed &&
+      prevProps.exercise.id === nextProps.exercise.id &&
+      prevProps.setIndex === nextProps.setIndex &&
+      // Still compare weight/reps for external changes (like loading from storage)
+      prevProps.set.weight === nextProps.set.weight &&
+      prevProps.set.reps === nextProps.set.reps
+    );
+  });
 
   return (
     <Modal
@@ -274,6 +410,7 @@ export default function ActiveWorkoutModal({
       transparent={false}
       visible={visible}
       onRequestClose={onMinimize}
+      supportedOrientations={['portrait']}
     >
       <SafeAreaView style={styles.safeArea}>
         <TouchableWithoutFeedback onPress={handleBackgroundPress}>
@@ -298,22 +435,13 @@ export default function ActiveWorkoutModal({
           </View>
           
           {/* Workout Stats */}
-          <View style={styles.workoutStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{formatDuration(stats.durationInSeconds)}</Text>
-              <Text style={styles.statLabel}>Duration</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.totalVolume}</Text>
-              <Text style={styles.statLabel}>Volume (lbs)</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.completedSets}</Text>
-              <Text style={styles.statLabel}>Sets</Text>
-            </View>
-          </View>
+          {WorkoutStatsDisplay}
           
-          <ScrollView style={styles.scrollView}>
+          <ScrollView 
+            style={styles.scrollView}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
             <View style={styles.content}>
               {/* Current Exercises */}
               {exercises.map(exercise => (
@@ -612,5 +740,10 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
     backgroundColor: theme.cardBackground,
+  },
+  setNumberContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

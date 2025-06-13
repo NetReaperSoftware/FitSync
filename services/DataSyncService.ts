@@ -161,6 +161,28 @@ class DataSyncService {
         return { success: false, error: 'No authenticated user' };
       }
 
+      // Check if folder ID is temporary - if so, try to find the real folder ID first
+      if (routineData.folderId && routineData.folderId.startsWith('temp_')) {
+        console.log('⏳ Folder ID is temporary, looking for real folder ID:', routineData.folderId);
+        
+        // Try to find if the folder has already been created in the database
+        const { data: folderData } = await supabase
+          .schema('fitness') 
+          .from('workout_routine_folders')
+          .select('id')
+          .eq('created_by', user.data.user.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (folderData && folderData.length > 0) {
+          console.log('Found recently created folder, using ID:', folderData[0].id);
+          routineData.folderId = folderData[0].id;
+        } else {
+          console.log('No real folder found yet, skipping folder assignment');
+          routineData.folderId = null; // Create routine without folder assignment for now
+        }
+      }
+
       console.log('Creating routine in database with data:', {
         name: routineData.name,
         description: routineData.description || 'User created routine',
@@ -333,6 +355,10 @@ class DataSyncService {
       }
 
       console.log('✅ Created folder in database with ID:', newFolderData.id);
+      
+      // Update any pending routine operations that reference this temporary folder ID
+      this.updatePendingRoutineFolderIds(folderData.tempId, newFolderData.id);
+      
       return { 
         success: true, 
         data: { 
@@ -470,6 +496,22 @@ class DataSyncService {
       console.error('Unexpected error in syncDeleteFolder:', error);
       return { success: false, error: String(error) };
     }
+  }
+
+  // Helper method to update folder IDs in pending routine operations
+  private updatePendingRoutineFolderIds(tempFolderId: string, realFolderId: string): void {
+    console.log('🔄 Updating pending routine operations from temp folder ID:', tempFolderId, 'to real ID:', realFolderId);
+    
+    let updatedCount = 0;
+    this.syncQueue.forEach(operation => {
+      if (operation.type === 'CREATE_ROUTINE' && operation.data.folderId === tempFolderId) {
+        operation.data.folderId = realFolderId;
+        updatedCount++;
+        console.log('Updated routine operation folder ID:', operation.data.name);
+      }
+    });
+    
+    console.log(`✅ Updated ${updatedCount} pending routine operations with new folder ID`);
   }
 
   // Public methods for optimistic updates
