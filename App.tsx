@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UnitsProvider } from './contexts/UnitsContext';
 
 // Screens
 import SplashScreen from './screens/SplashScreen';
@@ -140,7 +141,9 @@ export default function App(): React.JSX.Element {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContent />
+        <UnitsProvider>
+          <AppContent />
+        </UnitsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

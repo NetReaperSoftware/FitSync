@@ -134,7 +134,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           .insert({
             workout_id: workoutData.id,
             exercise_id: exercise.id,
-            order: exerciseIndex + 1
+            order: exerciseIndex + 1,
+            notes: exercise.notes || null
           })
           .select()
           .single();
@@ -155,6 +156,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
               workout_exercise_id: workoutExerciseData.id,
               reps: set.reps || 0,
               weight_lbs: set.weight || 0,
+              degree: set.degree || null,
               created_at: new Date().toISOString()
             });
 
@@ -335,6 +337,8 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           onUpdateSet={activeWorkout.updateActiveWorkoutSet}
           onAddSet={activeWorkout.addSetToExercise}
           onRemoveSet={activeWorkout.removeSetFromExercise}
+          onUpdateExerciseNotes={activeWorkout.updateActiveWorkoutExerciseNotes}
+          onUpdateExerciseDegree={activeWorkout.updateActiveWorkoutExerciseDegree}
         />
 
         <WorkoutOverviewModal
@@ -368,6 +372,7 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
           onReplaceExercise={routineManagement.replaceExerciseInRoutine}
           onReorderExercises={routineManagement.reorderRoutineExercises}
           onUpdateExerciseNotes={routineManagement.updateExerciseNotes}
+          onUpdateExerciseDegree={routineManagement.updateExerciseDegree}
         />
 
         <FolderCreationModal

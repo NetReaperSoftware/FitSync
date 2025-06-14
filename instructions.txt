@@ -1,0 +1,7 @@
+Currently, there are Exercises with degree values that can be null or contain a number. 
+For exercises with a non-null "degree" value, lets show the degree in the exercise           
+description in the routine creation screens, and active workout screens. The user should be  
+able to change this degree with the options "15, 30, 45, 60, 75, 90" degrees. exercise_sets 
+table now contains a column degree for tracking the degree of an exercise the user completes
+Lets implement the degree description and ensure degree is tracked for user exercises it applies to
+

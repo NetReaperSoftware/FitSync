@@ -16,6 +16,7 @@ import {
   GestureDetector,
 } from 'react-native-gesture-handler';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useUnits } from '../../contexts/UnitsContext';
 import OptionsBottomSheet from './OptionsBottomSheet';
 
 type Exercise = {
@@ -24,6 +25,7 @@ type Exercise = {
   muscleGroup: string;
   sets: any[];
   notes?: string;
+  degree?: number | null;
 };
 
 type Folder = {
@@ -50,6 +52,7 @@ interface RoutineCreationModalProps {
   onReplaceExercise: (exerciseIndex: number) => void;
   onReorderExercises: (fromIndex: number, toIndex: number) => void;
   onUpdateExerciseNotes: (exerciseIndex: number, notes: string) => void;
+  onUpdateExerciseDegree: (exerciseIndex: number, degree: number) => void;
 }
 
 export default function RoutineCreationModal({
@@ -70,15 +73,19 @@ export default function RoutineCreationModal({
   onRemoveExercise,
   onReplaceExercise,
   onReorderExercises,
-  onUpdateExerciseNotes
+  onUpdateExerciseNotes,
+  onUpdateExerciseDegree
 }: RoutineCreationModalProps) {
   const { theme } = useTheme();
+  const { getWeightLabel } = useUnits();
   const styles = createStyles(theme);
   const [reorderModeExercise, setReorderModeExercise] = useState<number | null>(null);
   const [swipedRows, setSwipedRows] = useState<Set<string>>(new Set());
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
   const [bottomSheetOptions, setBottomSheetOptions] = useState<any[]>([]);
   const [bottomSheetTitle, setBottomSheetTitle] = useState<string | undefined>(undefined);
+  const [showDegreeSelector, setShowDegreeSelector] = useState(false);
+  const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number | null>(null);
 
   const handleLongPress = (exerciseIndex: number) => {
     setReorderModeExercise(exerciseIndex);
@@ -468,6 +475,23 @@ export default function RoutineCreationModal({
                       )}
                     </View>
                   
+                  {/* Degree Selector - Hidden when in reorder mode and only shown for exercises with degree */}
+                  {!isCollapsed && typeof exercise.degree === 'number' && (
+                    <View style={styles.degreeSection}>
+                      <Text style={styles.degreeLabel}>Degree</Text>
+                      <TouchableOpacity
+                        style={styles.degreeSelector}
+                        onPress={() => {
+                          setSelectedExerciseIndex(exerciseIndex);
+                          setShowDegreeSelector(true);
+                        }}
+                      >
+                        <Text style={styles.degreeSelectorText}>{exercise.degree}°</Text>
+                        <Text style={styles.degreeSelectorArrow}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  
                   {/* Exercise Notes - Hidden when in reorder mode */}
                   {!isCollapsed && (
                     <View style={styles.notesSection}>
@@ -491,7 +515,7 @@ export default function RoutineCreationModal({
                       {/* Table Header */}
                       <View style={styles.tableHeader}>
                         <Text style={styles.tableHeaderText}>Set</Text>
-                        <Text style={styles.tableHeaderText}>Weight (lbs)</Text>
+                        <Text style={styles.tableHeaderText}>{getWeightLabel()}</Text>
                         <Text style={styles.tableHeaderText}>Reps</Text>
                       </View>
                       
@@ -537,6 +561,54 @@ export default function RoutineCreationModal({
           options={bottomSheetOptions}
           onClose={() => setBottomSheetVisible(false)}
         />
+        
+        {/* Degree Selector Modal */}
+        <Modal
+          visible={showDegreeSelector}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDegreeSelector(false)}
+        >
+          <View style={styles.degreeModalOverlay}>
+            <View style={styles.degreeModalContent}>
+              <Text style={styles.degreeModalTitle}>Select Degree</Text>
+              <View style={styles.degreeOptionsContainer}>
+                {[0, 15, 30, 45, 60, 75, 90].map((degree) => (
+                  <TouchableOpacity
+                    key={degree}
+                    style={[
+                      styles.degreeOption,
+                      selectedExerciseIndex !== null && 
+                      exercises[selectedExerciseIndex]?.degree === degree && 
+                      styles.degreeOptionSelected
+                    ]}
+                    onPress={() => {
+                      if (selectedExerciseIndex !== null) {
+                        onUpdateExerciseDegree(selectedExerciseIndex, degree);
+                      }
+                      setShowDegreeSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.degreeOptionText,
+                      selectedExerciseIndex !== null && 
+                      exercises[selectedExerciseIndex]?.degree === degree && 
+                      styles.degreeOptionTextSelected
+                    ]}>
+                      {degree}°
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={styles.degreeModalCancel}
+                onPress={() => setShowDegreeSelector(false)}
+              >
+                <Text style={styles.degreeModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </Modal>
   );
@@ -854,5 +926,97 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
     backgroundColor: theme.background,
+  },
+  degreeText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontStyle: 'italic',
+  },
+  degreeSection: {
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  degreeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.text,
+    marginBottom: 4,
+  },
+  degreeSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.inputBorder,
+    backgroundColor: theme.inputBackground,
+    borderRadius: 6,
+    padding: 8,
+    minHeight: 36,
+  },
+  degreeSelectorText: {
+    fontSize: 13,
+    color: theme.text,
+    fontWeight: '600',
+  },
+  degreeSelectorArrow: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  degreeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  degreeModalContent: {
+    backgroundColor: theme.cardBackground,
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+  },
+  degreeModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.text,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  degreeOptionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  degreeOption: {
+    backgroundColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  degreeOptionSelected: {
+    backgroundColor: theme.primary,
+  },
+  degreeOptionText: {
+    fontSize: 16,
+    color: theme.text,
+    fontWeight: '500',
+  },
+  degreeOptionTextSelected: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  degreeModalCancel: {
+    backgroundColor: theme.border,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  degreeModalCancelText: {
+    color: theme.textSecondary,
+    fontWeight: '600',
   },
 });

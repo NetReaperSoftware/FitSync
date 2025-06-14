@@ -19,12 +19,14 @@ import {
   GestureDetector,
 } from 'react-native-gesture-handler';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useUnits } from '../../contexts/UnitsContext';
 
 type ExerciseSet = {
   id: string;
   weight: number;
   reps: number;
   completed: boolean;
+  degree?: number | null;
 };
 
 type Exercise = {
@@ -32,6 +34,8 @@ type Exercise = {
   name: string;
   muscleGroup: string;
   sets: ExerciseSet[];
+  degree?: number | null;
+  notes?: string;
 };
 
 interface ActiveWorkoutModalProps {
@@ -44,9 +48,11 @@ interface ActiveWorkoutModalProps {
   onDiscard: () => void;
   onAddExercise: () => void;
   onToggleSetCompletion: (exerciseId: string, setId: string) => void;
-  onUpdateSet: (exerciseId: string, setId: string, field: 'weight' | 'reps', value: number) => void;
+  onUpdateSet: (exerciseId: string, setId: string, field: 'weight' | 'reps' | 'degree', value: number) => void;
   onAddSet: (exerciseId: string) => void;
   onRemoveSet: (exerciseId: string, setId: string) => void;
+  onUpdateExerciseNotes: (exerciseId: string, notes: string) => void;
+  onUpdateExerciseDegree: (exerciseId: string, degree: number) => void;
 }
 
 export default function ActiveWorkoutModal({
@@ -61,11 +67,16 @@ export default function ActiveWorkoutModal({
   onToggleSetCompletion,
   onUpdateSet,
   onAddSet,
-  onRemoveSet
+  onRemoveSet,
+  onUpdateExerciseNotes,
+  onUpdateExerciseDegree
 }: ActiveWorkoutModalProps) {
   const { theme } = useTheme();
+  const { getVolumeLabel, getWeightLabel } = useUnits();
   const styles = createStyles(theme);
   const [swipedRows, setSwipedRows] = useState<Set<string>>(new Set());
+  const [showDegreeSelector, setShowDegreeSelector] = useState(false);
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
 
   // Isolated Timer Component that doesn't affect parent re-renders
   const IsolatedTimerDisplay = React.memo(({ 
@@ -136,7 +147,7 @@ export default function ActiveWorkoutModal({
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{stats.totalVolume}</Text>
-          <Text style={styles.statLabel}>Volume (lbs)</Text>
+          <Text style={styles.statLabel}>{getVolumeLabel()}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{stats.completedSets}</Text>
@@ -478,9 +489,40 @@ export default function ActiveWorkoutModal({
                     {exercise.name} - {exercise.muscleGroup}
                   </Text>
                   
+                  {/* Degree Selector - Only for exercises with degree */}
+                  {typeof exercise.degree === 'number' && (
+                    <View style={styles.exerciseOptionsSection}>
+                      <Text style={styles.exerciseOptionsLabel}>Degree</Text>
+                      <TouchableOpacity
+                        style={styles.exerciseDegreeSelector}
+                        onPress={() => {
+                          setSelectedExerciseId(exercise.id);
+                          setShowDegreeSelector(true);
+                        }}
+                      >
+                        <Text style={styles.exerciseDegreeSelectorText}>{exercise.degree}°</Text>
+                        <Text style={styles.exerciseDegreeSelectorArrow}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  
+                  {/* Exercise Notes */}
+                  <View style={styles.exerciseOptionsSection}>
+                    <Text style={styles.exerciseOptionsLabel}>Notes (optional)</Text>
+                    <TextInput
+                      style={styles.exerciseNotesInput}
+                      placeholder="Add exercise notes..."
+                      placeholderTextColor={theme.textMuted}
+                      value={exercise.notes || ''}
+                      onChangeText={(notes) => onUpdateExerciseNotes(exercise.id, notes)}
+                      multiline={true}
+                      numberOfLines={1}
+                    />
+                  </View>
+                  
                   <View style={styles.setsHeader}>
                     <Text style={styles.setHeaderText}>Set</Text>
-                    <Text style={styles.setHeaderText}>Weight</Text>
+                    <Text style={styles.setHeaderText}>{getWeightLabel().replace(' (lbs)', '').replace(' (kg)', '')}</Text>
                     <Text style={styles.setHeaderText}>Reps</Text>
                     <Text style={styles.setHeaderText}>Done</Text>
                   </View>
@@ -522,6 +564,54 @@ export default function ActiveWorkoutModal({
             </TouchableWithoutFeedback>
           </ScrollView>
         </KeyboardAvoidingView>
+        
+        {/* Degree Selector Modal */}
+        <Modal
+          visible={showDegreeSelector}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDegreeSelector(false)}
+        >
+          <View style={styles.degreeModalOverlay}>
+            <View style={styles.degreeModalContent}>
+              <Text style={styles.degreeModalTitle}>Select Degree</Text>
+              <View style={styles.degreeOptionsContainer}>
+                {[0, 15, 30, 45, 60, 75, 90].map((degree) => (
+                  <TouchableOpacity
+                    key={degree}
+                    style={[
+                      styles.degreeOption,
+                      selectedExerciseId && 
+                      exercises.find(e => e.id === selectedExerciseId)?.degree === degree && 
+                      styles.degreeOptionSelected
+                    ]}
+                    onPress={() => {
+                      if (selectedExerciseId) {
+                        onUpdateExerciseDegree(selectedExerciseId, degree);
+                      }
+                      setShowDegreeSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.degreeOptionText,
+                      selectedExerciseId && 
+                      exercises.find(e => e.id === selectedExerciseId)?.degree === degree && 
+                      styles.degreeOptionTextSelected
+                    ]}>
+                      {degree}°
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={styles.degreeModalCancel}
+                onPress={() => setShowDegreeSelector(false)}
+              >
+                <Text style={styles.degreeModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </Modal>
   );
@@ -782,5 +872,122 @@ const createStyles = (theme: any) => StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  degreeText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontStyle: 'italic',
+  },
+  degreeButton: {
+    backgroundColor: theme.primary,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 4,
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  degreeButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  degreeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  degreeModalContent: {
+    backgroundColor: theme.cardBackground,
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+  },
+  degreeModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.text,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  degreeOptionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  degreeOption: {
+    backgroundColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  degreeOptionSelected: {
+    backgroundColor: theme.primary,
+  },
+  degreeOptionText: {
+    fontSize: 16,
+    color: theme.text,
+    fontWeight: '500',
+  },
+  degreeOptionTextSelected: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  degreeModalCancel: {
+    backgroundColor: theme.border,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  degreeModalCancelText: {
+    color: theme.textSecondary,
+    fontWeight: '600',
+  },
+  exerciseOptionsSection: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  exerciseOptionsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.text,
+    marginBottom: 4,
+  },
+  exerciseDegreeSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.inputBorder,
+    backgroundColor: theme.inputBackground,
+    borderRadius: 6,
+    padding: 8,
+    minHeight: 36,
+  },
+  exerciseDegreeSelectorText: {
+    fontSize: 13,
+    color: theme.text,
+    fontWeight: '600',
+  },
+  exerciseDegreeSelectorArrow: {
+    fontSize: 12,
+    color: theme.textSecondary,
+  },
+  exerciseNotesInput: {
+    borderWidth: 1,
+    borderColor: theme.inputBorder,
+    backgroundColor: theme.inputBackground,
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 13,
+    color: theme.text,
+    minHeight: 36,
+    textAlignVertical: 'top',
   },
 });

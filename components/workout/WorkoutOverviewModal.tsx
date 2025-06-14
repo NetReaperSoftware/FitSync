@@ -10,6 +10,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useUnits } from '../../contexts/UnitsContext';
 
 type Exercise = {
   id: string;
@@ -49,6 +50,7 @@ export default function WorkoutOverviewModal({
   onCancel
 }: WorkoutOverviewModalProps) {
   const { theme } = useTheme();
+  const { getVolumeLabel } = useUnits();
   const styles = createStyles(theme);
   const [notes, setNotes] = useState(initialNotes);
 
@@ -146,7 +148,7 @@ export default function WorkoutOverviewModal({
                 
                 <View style={styles.statCard}>
                   <Text style={styles.statValue}>{stats.totalVolume}</Text>
-                  <Text style={styles.statLabel}>Volume (lbs)</Text>
+                  <Text style={styles.statLabel}>{getVolumeLabel()}</Text>
                 </View>
                 
                 <View style={styles.statCard}>

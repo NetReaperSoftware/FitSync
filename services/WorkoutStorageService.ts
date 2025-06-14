@@ -6,6 +6,7 @@ export type WorkoutSet = {
   reps: number;
   completed: boolean;
   completedAt?: Date;
+  degree?: number | null;
 };
 
 export type WorkoutExercise = {
@@ -14,6 +15,7 @@ export type WorkoutExercise = {
   muscleGroup: string;
   sets: WorkoutSet[];
   notes?: string;
+  degree?: number | null;
 };
 
 export type WorkoutSession = {

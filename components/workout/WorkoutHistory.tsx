@@ -6,6 +6,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useUnits } from '../../contexts/UnitsContext';
 
 type ExerciseSet = {
   id: string;
@@ -39,6 +40,7 @@ export default function WorkoutHistory({
   onToggleSetCompletion
 }: WorkoutHistoryProps) {
   const { theme } = useTheme();
+  const { formatWeight, getWeightLabel } = useUnits();
   const styles = createStyles(theme);
 
   const renderWorkout = (workout: Workout) => {
@@ -57,7 +59,7 @@ export default function WorkoutHistory({
             
             <View style={styles.setsHeader}>
               <Text style={styles.setHeaderText}>Set</Text>
-              <Text style={styles.setHeaderText}>Weight</Text>
+              <Text style={styles.setHeaderText}>{getWeightLabel().replace(' (lbs)', '').replace(' (kg)', '')}</Text>
               <Text style={styles.setHeaderText}>Reps</Text>
               <Text style={styles.setHeaderText}>Done</Text>
             </View>
@@ -65,7 +67,7 @@ export default function WorkoutHistory({
             {exercise.sets.map((set, index) => (
               <View key={set.id} style={styles.setRow}>
                 <Text style={styles.setText}>{index + 1}</Text>
-                <Text style={styles.setText}>{set.weight > 0 ? `${set.weight} lbs` : 'BW'}</Text>
+                <Text style={styles.setText}>{formatWeight(set.weight)}</Text>
                 <Text style={styles.setText}>{set.reps}</Text>
                 <TouchableOpacity
                   style={[

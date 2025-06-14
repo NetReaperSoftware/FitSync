@@ -47,10 +47,12 @@ export const useRoutineManagement = () => {
             reps,
             weight_lbs,
             order_in_routine,
+            notes,
             exercises (
               id,
               name,
-              muscle_group_primary
+              muscle_group_primary,
+              degree
             )
           )
         `)
@@ -84,6 +86,8 @@ export const useRoutineManagement = () => {
                 id: exerciseId,
                 name: dbExercise.exercises.name,
                 muscleGroup: dbExercise.exercises.muscle_group_primary,
+                degree: dbExercise.exercises.degree,
+                notes: dbExercise.notes || '',
                 sets: [],
                 order: dbExercise.order_in_routine
               });
@@ -149,11 +153,13 @@ export const useRoutineManagement = () => {
       id: exercise.id,
       name: exercise.name,
       muscleGroup: exercise.muscle_group_primary,
+      degree: exercise.degree,
       sets: [{
         id: `s${Date.now()}-1`,
         weight: 0,
         reps: 0,
         completed: false,
+        degree: exercise.degree || null,
       }],
     };
     setCurrentRoutineExercises([...currentRoutineExercises, newExercise]);
@@ -273,6 +279,20 @@ export const useRoutineManagement = () => {
     });
   }, []);
 
+  // Update exercise degree
+  const updateExerciseDegree = useCallback((exerciseIndex: number, degree: number) => {
+    setCurrentRoutineExercises(prevExercises => {
+      const updatedExercises = [...prevExercises];
+      if (updatedExercises[exerciseIndex]) {
+        updatedExercises[exerciseIndex] = {
+          ...updatedExercises[exerciseIndex],
+          degree: degree
+        };
+      }
+      return updatedExercises;
+    });
+  }, []);
+
   // Update exercise order in database
   const updateExerciseOrderInDatabase = useCallback(async (reorderedExercises: Exercise[]) => {
     if (!editingRoutineId) return;
@@ -358,6 +378,60 @@ export const useRoutineManagement = () => {
         // EDITING EXISTING ROUTINE
         console.log('Updating existing routine:', editingRoutineId);
         
+        // Update the routine record
+        const { error: routineUpdateError } = await supabase
+          .schema('fitness')
+          .from('workout_routines')
+          .update({
+            name: routineName.trim(),
+            folder_id: selectedFolder
+          })
+          .eq('id', editingRoutineId);
+
+        if (routineUpdateError) {
+          console.error('Error updating routine:', routineUpdateError);
+          return false;
+        }
+
+        // Delete existing routine exercises
+        const { error: deleteError } = await supabase
+          .schema('fitness')
+          .from('workout_routine_exercises')
+          .delete()
+          .eq('routine_id', editingRoutineId);
+
+        if (deleteError) {
+          console.error('Error deleting old routine exercises:', deleteError);
+          return false;
+        }
+
+        // Insert new routine exercises with notes
+        const routineExercises: any[] = [];
+        currentRoutineExercises.forEach((exercise, exerciseIndex) => {
+          exercise.sets.forEach((set, setIndex) => {
+            routineExercises.push({
+              routine_id: editingRoutineId,
+              exercise_id: exercise.id,
+              sets: 1,
+              reps: set.reps || 0,
+              weight_lbs: set.weight || 0,
+              order_in_routine: exerciseIndex + 1,
+              set_number: setIndex + 1,
+              notes: exercise.notes || null
+            });
+          });
+        });
+
+        const { error: insertError } = await supabase
+          .schema('fitness')
+          .from('workout_routine_exercises')
+          .insert(routineExercises);
+
+        if (insertError) {
+          console.error('Error inserting routine exercises:', insertError);
+          return false;
+        }
+        
         // OPTIMISTIC UPDATE: Update routine immediately in UI
         setRoutines(prevRoutines => prevRoutines.map(routine =>
           routine.id === editingRoutineId
@@ -370,30 +444,60 @@ export const useRoutineManagement = () => {
             : routine
         ));
         
-        // Queue for background sync (only if it's not a temp ID)
-        if (!editingRoutineId.startsWith('temp_')) {
-          try {
-            dataSyncService.updateRoutineOptimistic({
-              id: editingRoutineId,
-              name: routineName.trim(),
-              description: `Routine with ${currentRoutineExercises.length} exercises`,
-              folderId: selectedFolder,
-              exercises: currentRoutineExercises
-            });
-            console.log('💪 Routine update queued for sync:', editingRoutineId);
-          } catch (error) {
-            console.error('❌ Failed to queue routine update:', error);
-            return false;
-          }
-        }
+        console.log('Successfully updated routine in database');
       } else {
         // CREATING NEW ROUTINE
         console.log('Creating new routine');
         
-        // OPTIMISTIC UPDATE: Create routine with temporary ID
-        const tempId = dataSyncService.generateTempId();
+        // Create the routine record
+        const { data: routineData, error: routineError } = await supabase
+          .schema('fitness')
+          .from('workout_routines')
+          .insert({
+            name: routineName.trim(),
+            description: `Routine with ${currentRoutineExercises.length} exercises`,
+            folder_id: selectedFolder,
+            created_by: user.data.user.id,
+            is_default: false
+          })
+          .select()
+          .single();
+
+        if (routineError) {
+          console.error('Error creating routine:', routineError);
+          return false;
+        }
+
+        // Insert routine exercises with notes
+        const routineExercises: any[] = [];
+        currentRoutineExercises.forEach((exercise, exerciseIndex) => {
+          exercise.sets.forEach((set, setIndex) => {
+            routineExercises.push({
+              routine_id: routineData.id,
+              exercise_id: exercise.id,
+              sets: 1,
+              reps: set.reps || 0,
+              weight_lbs: set.weight || 0,
+              order_in_routine: exerciseIndex + 1,
+              set_number: setIndex + 1,
+              notes: exercise.notes || null
+            });
+          });
+        });
+
+        const { error: exercisesError } = await supabase
+          .schema('fitness')
+          .from('workout_routine_exercises')
+          .insert(routineExercises);
+
+        if (exercisesError) {
+          console.error('Error inserting routine exercises:', exercisesError);
+          return false;
+        }
+
+        // Create new routine object for UI
         const newRoutine: Routine = {
-          id: tempId,
+          id: routineData.id,
           name: routineName.trim(),
           exercises: currentRoutineExercises,
           folderId: selectedFolder,
@@ -401,26 +505,9 @@ export const useRoutineManagement = () => {
           isUserOwned: true
         };
         
-        // Immediately update UI
+        // Update UI
         setRoutines(prev => [...prev, newRoutine]);
-        console.log('Optimistically created routine with temp ID:', tempId);
-        
-        // Queue for background sync
-        try {
-          const syncTempId = dataSyncService.createRoutineOptimistic({
-            name: routineName.trim(),
-            description: `Routine with ${currentRoutineExercises.length} exercises`,
-            folderId: selectedFolder,
-            exercises: currentRoutineExercises,
-            tempId: tempId
-          });
-          console.log('💪 Routine queued for sync:', routineName.trim(), 'with temp ID:', syncTempId);
-        } catch (error) {
-          console.error('❌ Failed to queue routine creation:', error);
-          // Rollback optimistic update
-          setRoutines(prevRoutines => prevRoutines.filter(r => r.id !== tempId));
-          return false;
-        }
+        console.log('Successfully created routine in database:', routineData.id);
       }
       
       // Reset form state
@@ -587,6 +674,8 @@ export const useRoutineManagement = () => {
       ...exercise,
       // Keep the original exercise ID from database (it's already a UUID)
       id: exercise.id,
+      // Copy routine notes to workout (will be saved to workout_exercises table)
+      notes: exercise.notes || '',
       sets: exercise.sets.length > 0 
         ? exercise.sets.map((set, setIndex) => ({
             // Generate new set IDs for the workout instance
@@ -594,12 +683,14 @@ export const useRoutineManagement = () => {
             weight: set.weight || 0,
             reps: set.reps || 0,
             completed: false,
+            degree: exercise.degree || null,
           }))
         : [{
             id: `s${Date.now()}-${exerciseIndex}-1`,
             weight: 0,
             reps: 0,
             completed: false,
+            degree: exercise.degree || null,
           }],
     }));
     
@@ -635,6 +726,7 @@ export const useRoutineManagement = () => {
     handleExerciseReplacement,
     reorderRoutineExercises,
     updateExerciseNotes,
+    updateExerciseDegree,
     cancelRoutineCreation,
     saveRoutine,
     startRenamingRoutine,

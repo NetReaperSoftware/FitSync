@@ -89,3 +89,12 @@ When completing an active workout, be it from a routine or from a new workout, t
 
 # Future Developments
 - Update all screens to use react-native-gesture-handler and KeyboardAvoidingView to update and make more efficient
+- Cardio Tracker Screen
+- DB is not set up to handle Imperial/Metric Units, fix this later
+- The "Units" togglable button is not completely intuitive, lets switch the toggle button
+Workout Screen:
+- Change "None" to Body weight
+- Classify Band exercises under other
+- Make "Notes" section in database and propagate to it - for exercise notes
+- Repair Active Workout Screen to have "Notes" section (Only Edit Routine does currently)
+- Ensure both degree and notes propagate in all screens

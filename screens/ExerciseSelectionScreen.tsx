@@ -41,7 +41,7 @@ export default function ExerciseSelectionScreen({
   const [equipmentModalVisible, setEquipmentModalVisible] = useState(false);
   const [muscleModalVisible, setMuscleModalVisible] = useState(false);
 
-  const equipmentOptions = ['All Equipment', 'None', 'Barbell', 'Dumbbell', 'Machine', 'Other'];
+  const equipmentOptions = ['All Equipment', 'None (Bodyweight)', 'Barbell', 'Dumbbell', 'Machine', 'Other'];
   
   // Get unique muscle groups from exercises
   const muscleGroupOptions = useMemo((): string[] => {
@@ -104,8 +104,9 @@ export default function ExerciseSelectionScreen({
         exercise.muscle_group_primary.toLowerCase().includes(searchQuery.toLowerCase());
       
       // Equipment filter
+      const equipmentToMatch = selectedEquipment === 'None (Bodyweight)' ? 'None' : selectedEquipment;
       const matchesEquipment = selectedEquipment === 'All Equipment' || 
-        exercise.equipment.toLowerCase() === selectedEquipment.toLowerCase();
+        exercise.equipment.toLowerCase() === equipmentToMatch.toLowerCase();
       
       // Muscle group filter - check if selected muscle is included in either primary or secondary
       const matchesMuscleGroup = selectedMuscleGroup === 'All Muscles' ||

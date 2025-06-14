@@ -7,6 +7,7 @@ export type ExerciseSet = {
   weight: number;
   reps: number;
   completed: boolean;
+  degree?: number | null;
 };
 
 export type Exercise = {
@@ -15,6 +16,7 @@ export type Exercise = {
   muscleGroup: string;
   sets: ExerciseSet[];
   notes?: string;
+  degree?: number | null;
 };
 
 export type DatabaseExercise = {
@@ -134,11 +136,13 @@ export const useActiveWorkout = () => {
       id: exercise.id,
       name: exercise.name,
       muscleGroup: exercise.muscle_group_primary,
+      degree: exercise.degree,
       sets: [{
         id: `s${Date.now()}-1`,
         weight: 0,
         reps: 0,
         completed: false,
+        degree: exercise.degree || null,
       }],
     };
     
@@ -190,7 +194,7 @@ export const useActiveWorkout = () => {
   }, [currentWorkoutId, workoutStartTime, totalPausedDuration]);
 
   // Update set values (weight/reps)
-  const updateActiveWorkoutSet = useCallback((exerciseId: string, setId: string, field: 'weight' | 'reps', value: number) => {
+  const updateActiveWorkoutSet = useCallback((exerciseId: string, setId: string, field: 'weight' | 'reps' | 'degree', value: number) => {
     let updatedExercises: Exercise[] = [];
     
     setCurrentWorkoutExercises(prevExercises => {
@@ -233,6 +237,7 @@ export const useActiveWorkout = () => {
           weight: 0,
           reps: 0,
           completed: false,
+          degree: exercise.degree || null,
         };
         
         return { ...exercise, sets: [...exercise.sets, newSet] };
@@ -250,6 +255,63 @@ export const useActiveWorkout = () => {
         status: 'active'
       };
       await workoutStorageService.saveActiveWorkout(workout);
+    }
+  }, [currentWorkoutId, workoutStartTime, totalPausedDuration]);
+
+  // Update exercise notes
+  const updateActiveWorkoutExerciseNotes = useCallback((exerciseId: string, notes: string) => {
+    let updatedExercises: Exercise[] = [];
+    
+    setCurrentWorkoutExercises(prevExercises => {
+      updatedExercises = prevExercises.map(exercise => {
+        if (exercise.id !== exerciseId) return exercise;
+        return { ...exercise, notes };
+      });
+      return updatedExercises;
+    });
+
+    // Save to storage with debouncing for text input changes
+    if (currentWorkoutId && workoutStartTime) {
+      const workout: WorkoutSession = {
+        id: currentWorkoutId,
+        startTime: workoutStartTime,
+        exercises: updatedExercises,
+        totalPausedDuration,
+        status: 'active'
+      };
+      debouncedStorageService.debouncedSaveWorkout(workout);
+    }
+  }, [currentWorkoutId, workoutStartTime, totalPausedDuration]);
+
+  // Update exercise degree
+  const updateActiveWorkoutExerciseDegree = useCallback((exerciseId: string, degree: number) => {
+    let updatedExercises: Exercise[] = [];
+    
+    setCurrentWorkoutExercises(prevExercises => {
+      updatedExercises = prevExercises.map(exercise => {
+        if (exercise.id !== exerciseId) return exercise;
+        
+        // Update exercise degree and all its sets
+        const updatedSets = exercise.sets.map(set => ({
+          ...set,
+          degree: degree
+        }));
+        
+        return { ...exercise, degree, sets: updatedSets };
+      });
+      return updatedExercises;
+    });
+
+    // Save to storage with immediate save
+    if (currentWorkoutId && workoutStartTime) {
+      const workout: WorkoutSession = {
+        id: currentWorkoutId,
+        startTime: workoutStartTime,
+        exercises: updatedExercises,
+        totalPausedDuration,
+        status: 'active'
+      };
+      debouncedStorageService.immediateSaveWorkout(workout);
     }
   }, [currentWorkoutId, workoutStartTime, totalPausedDuration]);
 
@@ -387,6 +449,8 @@ export const useActiveWorkout = () => {
     addExerciseToWorkout,
     toggleActiveWorkoutSetCompletion,
     updateActiveWorkoutSet,
+    updateActiveWorkoutExerciseNotes,
+    updateActiveWorkoutExerciseDegree,
     addSetToExercise,
     removeSetFromExercise,
     finishWorkout,
