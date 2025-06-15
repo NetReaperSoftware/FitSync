@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,6 +15,7 @@ import {
   ScrollView,
   Gesture,
   GestureDetector,
+  Swipeable,
 } from 'react-native-gesture-handler';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUnits } from '../../contexts/UnitsContext';
@@ -267,8 +268,7 @@ export default function ActiveWorkoutModal({
     setIndex: number;
     previousData?: Array<{weight: number, reps: number}>;
   }) => {
-    const translateX = React.useRef(new Animated.Value(0)).current;
-    const deleteOpacity = React.useRef(new Animated.Value(0)).current;
+    const swipeableRef = useRef<Swipeable>(null);
     const rowId = `${exercise.id}-${setIndex}`;
     const isSwipedOpen = swipedRows.has(rowId);
 
@@ -358,8 +358,8 @@ export default function ActiveWorkoutModal({
     }, []);
 
     // Refs for focus management
-    const weightInputRef = React.useRef<TextInput>(null);
-    const repsInputRef = React.useRef<TextInput>(null);
+    const weightInputRef = useRef<TextInput>(null);
+    const repsInputRef = useRef<TextInput>(null);
 
     // Format previous data for display
     const formatPreviousData = React.useCallback(() => {
@@ -377,164 +377,57 @@ export default function ActiveWorkoutModal({
       return `${setData.weight}${getWeightUnit()} x ${setData.reps}`;
     }, [previousData, setIndex, getWeightUnit]);
 
+    // Handle swipe open/close - simplified to avoid render loops
+    const handleSwipeableOpen = React.useCallback(() => {
+      // Simple logging for now, remove complex state management
+      console.log('Row opened:', rowId);
+    }, [rowId]);
 
-    const panGesture = Gesture.Pan()
-      .activeOffsetX([-10, 10])
-      .failOffsetY([-5, 5])
-      .onUpdate((event) => {
-        const currentlyOpen = swipedRows.has(rowId);
-        
-        if (currentlyOpen) {
-          // If already open, allow both left and right swipes
-          if (event.translationX > 0) {
-            // Right swipe to close - start from -80 position
-            translateX.setValue(Math.min(-80 + event.translationX, 0));
-          } else {
-            // Left swipe when already open - keep at -80
-            translateX.setValue(-80);
-          }
-        } else {
-          // If not open, only allow left swipe to open
-          if (event.translationX < 0) {
-            translateX.setValue(Math.max(event.translationX, -80));
-            // Show delete button when swiping left
-            if (event.translationX < -10) {
-              deleteOpacity.setValue(1);
-            }
-          }
-        }
-      })
-      .onEnd((event) => {
-        const currentlyOpen = swipedRows.has(rowId);
-        
-        if (currentlyOpen) {
-          // If already open, check if user wants to close with right swipe
-          if (event.translationX > 40 || (event.translationX > 20 && event.velocityX > 500)) {
-            // Close the swipe
-            Animated.spring(translateX, {
-              toValue: 0,
-              useNativeDriver: true,
-              damping: 20,
-              stiffness: 300,
-            }).start();
-            Animated.timing(deleteOpacity, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            }).start();
-            setSwipedRows(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(rowId);
-              return newSet;
-            });
-          } else {
-            // Keep it open
-            Animated.spring(translateX, {
-              toValue: -80,
-              useNativeDriver: true,
-              damping: 20,
-              stiffness: 300,
-            }).start();
-            deleteOpacity.setValue(1);
-          }
-        } else {
-          // If not open, check if user wants to open with left swipe
-          const shouldShowDelete = event.translationX < -40 || (event.translationX < -20 && event.velocityX < -500);
-          
-          if (shouldShowDelete) {
-            // Open the swipe and keep it visible
-            Animated.spring(translateX, {
-              toValue: -80,
-              useNativeDriver: true,
-              damping: 20,
-              stiffness: 300,
-            }).start();
-            setSwipedRows(prev => new Set([...prev, rowId]));
-            deleteOpacity.setValue(1);
-          } else {
-            // Snap back to closed
-            Animated.spring(translateX, {
-              toValue: 0,
-              useNativeDriver: true,
-              damping: 20,
-              stiffness: 300,
-            }).start();
-            Animated.timing(deleteOpacity, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            }).start();
-          }
-        }
-      });
+    const handleSwipeableClose = React.useCallback(() => {
+      // Simple logging for now, remove complex state management  
+      console.log('Row closed:', rowId);
+    }, [rowId]);
 
-    const tapGesture = Gesture.Tap()
-      .onEnd(() => {
-        handleTap();
-      });
-
-    // Function to close swipe from outside
-    React.useEffect(() => {
-      if (!swipedRows.has(rowId) && isSwipedOpen) {
-        // Row was closed externally, animate back
-        Animated.spring(translateX, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
-        Animated.timing(deleteOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      }
-    }, [swipedRows, rowId, isSwipedOpen]);
-
-    const handleDelete = () => {
+    // Delete handler
+    const handleDelete = React.useCallback(() => {
       onRemoveSet(exercise.id, set.id);
-    };
-
-    const handleTap = () => {
-      if (isSwipedOpen) {
-        // Close if swiped open
-        Animated.spring(translateX, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
-        Animated.timing(deleteOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-        setSwipedRows(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(rowId);
-          return newSet;
-        });
+      // Close the swipeable after deletion
+      if (swipeableRef.current) {
+        swipeableRef.current.close();
       }
-    };
+    }, [exercise.id, set.id, onRemoveSet]);
+
+    // Render delete button (appears when swiping left, so it's on the right side)
+    const renderRightActions = React.useCallback(() => (
+      <View style={styles.deleteButtonContainer}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDelete}
+        >
+          <Text style={styles.deleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    ), [handleDelete]);
+
+
+    // Remove problematic effect that was causing render loops
 
     return (
       <View style={styles.swipeableContainer}>
-        <Animated.View style={[
-          styles.deleteButtonContainer,
-          { opacity: deleteOpacity }
-        ]}>
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={handleDelete}
-          >
-            <Text style={styles.deleteButtonText}>Delete</Text>
-          </TouchableOpacity>
-        </Animated.View>
-        
-        <GestureDetector gesture={Gesture.Simultaneous(panGesture, tapGesture)}>
-          <Animated.View
-            style={[
-              styles.setRow,
-              { transform: [{ translateX }] }
-            ]}
-          >
-            <View style={styles.setRowContent}>
+        <Swipeable
+          ref={swipeableRef}
+          renderRightActions={renderRightActions}
+          rightThreshold={10}
+          friction={1}
+          overshootRight={false}
+          overshootLeft={false}
+          enabled={true}
+          childrenContainerStyle={{}}
+          containerStyle={{}}
+          onSwipeableOpen={handleSwipeableOpen}
+          onSwipeableClose={handleSwipeableClose}
+        >
+          <View style={styles.setRowContent}>
               {/* Set number */}
               <View style={styles.setNumberContainer}>
                 <Text style={styles.setText}>{setIndex + 1}</Text>
@@ -584,8 +477,7 @@ export default function ActiveWorkoutModal({
                 )}
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </GestureDetector>
+        </Swipeable>
       </View>
     );
   }, (prevProps, nextProps) => {
@@ -676,7 +568,6 @@ export default function ActiveWorkoutModal({
                   
                   {/* Exercise Notes */}
                   <View style={styles.exerciseOptionsSection}>
-                    <Text style={styles.exerciseOptionsLabel}>Notes (optional)</Text>
                     <TextInput
                       style={styles.exerciseNotesInput}
                       placeholder="Add exercise notes..."
@@ -877,8 +768,9 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   setsHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 8,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: theme.borderLight,
     marginBottom: 8,
@@ -895,14 +787,14 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.textSecondary,
     flex: 1,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 14,
   },
   setHeaderTextPrevious: {
     fontWeight: '600',
     color: theme.textSecondary,
     flex: 1.2,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 14,
     paddingLeft: 0,
     paddingRight: 8,
   },
@@ -911,25 +803,27 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.textSecondary,
     flex: 1,
     textAlign: 'center',
-    fontSize: 12,
-    marginLeft: 6,
+    fontSize: 14,
+    marginLeft: 2,
     marginRight: 2,
+    paddingHorizontal: 8,
   },
   setHeaderTextReps: {
     fontWeight: '600',
     color: theme.textSecondary,
     flex: 1,
     textAlign: 'center',
-    fontSize: 12,
-    marginLeft: 4,
-    marginRight: 4,
+    fontSize: 14,
+    marginLeft: 2,
+    marginRight: 2,
+    paddingHorizontal: 0,
   },
   setHeaderTextCheckbox: {
     fontWeight: '600',
     color: theme.textSecondary,
-    width: 32,
+    width: 40,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 14,
     marginHorizontal: 6,
   },
   setRow: {
@@ -944,6 +838,11 @@ const createStyles = (theme: any) => StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     color: theme.text,
+    fontSize: 16,
+    fontWeight: '500',
+    minHeight: 40,
+    textAlignVertical: 'center',
+    paddingVertical: 10,
   },
   setInput: {
     flex: 1,
@@ -961,14 +860,14 @@ const createStyles = (theme: any) => StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     color: theme.text,
-    backgroundColor: theme.inputBackground,
-    borderWidth: 1,
-    borderColor: theme.inputBorder,
-    borderRadius: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderRadius: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     marginHorizontal: 2,
-    fontSize: 13,
+    fontSize: 16,
+    minHeight: 40,
   },
   checkboxButton: {
     width: 24,
@@ -1062,22 +961,18 @@ const createStyles = (theme: any) => StyleSheet.create({
     overflow: 'hidden',
   },
   deleteButtonContainer: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 80,
+    backgroundColor: theme.error || '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.error || '#FF3B30',
+    width: 80,
+    height: '100%',
   },
   deleteButton: {
-    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    borderRadius: 6,
-    marginVertical: 4,
+    height: '100%',
+    borderRadius: 0,
   },
   deleteButtonText: {
     color: 'white',
@@ -1087,7 +982,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   setRowContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 8,
     paddingHorizontal: 4,
     backgroundColor: 'transparent',
   },
@@ -1104,10 +999,10 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingRight: 8,
   },
   previousDataText: {
-    fontSize: 11,
+    fontSize: 14,
     color: theme.textSecondary,
     textAlign: 'center',
-    //fontStyle: 'italic',
+    fontWeight: '500',
   },
   swipeHandle: {
     minHeight: 44,
@@ -1228,7 +1123,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: 0,
     paddingHorizontal: 0,
     paddingVertical: 8,
-    fontSize: 13,
+    fontSize: 15,
     color: theme.text,
     minHeight: 36,
     textAlignVertical: 'top',
