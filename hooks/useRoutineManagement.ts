@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { dataSyncService } from '../services/DataSyncService';
 import { Exercise, DatabaseExercise } from './useActiveWorkout';
+import { useUnits } from '../contexts/UnitsContext';
 
 export type Routine = {
   id: string;
@@ -13,6 +14,7 @@ export type Routine = {
 };
 
 export const useRoutineManagement = () => {
+  const { normalizeWeightForStorage, convertStoredWeightForDisplay } = useUnits();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [routineCreationVisible, setRoutineCreationVisible] = useState(false);
   const [currentRoutineExercises, setCurrentRoutineExercises] = useState<Exercise[]>([]);
@@ -93,10 +95,11 @@ export const useRoutineManagement = () => {
               });
             }
             
-            // Add this set to the exercise
+            // Add this set to the exercise (convert stored weight to display units)
+            const displayWeight = convertStoredWeightForDisplay(dbExercise.weight_lbs || 0);
             exerciseGroups.get(exerciseId).sets.push({
               id: `s${dbExercise.id}`,
-              weight: dbExercise.weight_lbs || 0,
+              weight: displayWeight,
               reps: dbExercise.reps || 0,
               completed: false
             });
@@ -314,12 +317,15 @@ export const useRoutineManagement = () => {
       const routineExercises: any[] = [];
       reorderedExercises.forEach((exercise, exerciseIndex) => {
         exercise.sets.forEach((set, setIndex) => {
+          // Normalize weight to lbs for storage
+          const normalizedWeight = normalizeWeightForStorage(set.weight || 0);
+          
           routineExercises.push({
             routine_id: editingRoutineId,
             exercise_id: exercise.id,
             sets: 1,
             reps: set.reps || 0,
-            weight_lbs: set.weight || 0,
+            weight_lbs: normalizedWeight,
             order_in_routine: exerciseIndex + 1, // New order based on reordered array
             set_number: setIndex + 1
           });
@@ -409,12 +415,15 @@ export const useRoutineManagement = () => {
         const routineExercises: any[] = [];
         currentRoutineExercises.forEach((exercise, exerciseIndex) => {
           exercise.sets.forEach((set, setIndex) => {
+            // Normalize weight to lbs for storage
+            const normalizedWeight = normalizeWeightForStorage(set.weight || 0);
+            
             routineExercises.push({
               routine_id: editingRoutineId,
               exercise_id: exercise.id,
               sets: 1,
               reps: set.reps || 0,
-              weight_lbs: set.weight || 0,
+              weight_lbs: normalizedWeight,
               order_in_routine: exerciseIndex + 1,
               set_number: setIndex + 1,
               notes: exercise.notes || null
@@ -472,12 +481,15 @@ export const useRoutineManagement = () => {
         const routineExercises: any[] = [];
         currentRoutineExercises.forEach((exercise, exerciseIndex) => {
           exercise.sets.forEach((set, setIndex) => {
+            // Normalize weight to lbs for storage
+            const normalizedWeight = normalizeWeightForStorage(set.weight || 0);
+            
             routineExercises.push({
               routine_id: routineData.id,
               exercise_id: exercise.id,
               sets: 1,
               reps: set.reps || 0,
-              weight_lbs: set.weight || 0,
+              weight_lbs: normalizedWeight,
               order_in_routine: exerciseIndex + 1,
               set_number: setIndex + 1,
               notes: exercise.notes || null

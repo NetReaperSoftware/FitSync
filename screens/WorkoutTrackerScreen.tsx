@@ -8,6 +8,7 @@ import {
   SafeAreaView
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useUnits } from '../contexts/UnitsContext';
 import { supabase } from '../supabaseClient';
 
 // Import all our custom hooks
@@ -35,6 +36,7 @@ import { WorkoutSession } from '../services/WorkoutStorageService';
 
 export default function WorkoutTrackerScreen(): React.JSX.Element {
   const { theme } = useTheme();
+  const { normalizeWeightForStorage } = useUnits();
   const styles = createStyles(theme);
 
   // Use our custom hooks
@@ -149,13 +151,16 @@ export default function WorkoutTrackerScreen(): React.JSX.Element {
         const completedSets = exercise.sets.filter(set => set.completed);
         
         for (const set of completedSets) {
+          // Normalize weight to lbs for storage (convert from user's input units)
+          const normalizedWeight = normalizeWeightForStorage(set.weight || 0);
+          
           const { error: setError } = await supabase
             .schema('fitness')
             .from('exercise_sets')
             .insert({
               workout_exercise_id: workoutExerciseData.id,
               reps: set.reps || 0,
-              weight_lbs: set.weight || 0,
+              weight_lbs: normalizedWeight,
               degree: set.degree || null,
               created_at: new Date().toISOString()
             });

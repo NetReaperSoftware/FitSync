@@ -86,6 +86,9 @@ export default function RoutineCreationModal({
   const [bottomSheetTitle, setBottomSheetTitle] = useState<string | undefined>(undefined);
   const [showDegreeSelector, setShowDegreeSelector] = useState(false);
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number | null>(null);
+  
+  // Global focus management to handle focus switching between rows
+  const globalBlurTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleLongPress = (exerciseIndex: number) => {
     setReorderModeExercise(exerciseIndex);
@@ -110,6 +113,15 @@ export default function RoutineCreationModal({
     // Clear all swiped rows
     setSwipedRows(new Set());
   };
+
+  // Cleanup global timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (globalBlurTimeoutRef.current) {
+        clearTimeout(globalBlurTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const showExerciseOptions = (exerciseIndex: number, exercise: Exercise) => {
     const options: Array<{text: string; onPress: () => Promise<void>; isDelete?: boolean}> = [
@@ -149,11 +161,50 @@ export default function RoutineCreationModal({
     const [localWeight, setLocalWeight] = useState(set.weight?.toString() || '0');
     const [localReps, setLocalReps] = useState(set.reps?.toString() || '0');
     
+    
     // Update local state when set data changes (e.g., when editing different routine)
     React.useEffect(() => {
       setLocalWeight(set.weight?.toString() || '0');
       setLocalReps(set.reps?.toString() || '0');
     }, [set.weight, set.reps]);
+
+    // Handle focus events using global focus management
+    const handleWeightFocus = React.useCallback(() => {
+      if (globalBlurTimeoutRef.current) {
+        clearTimeout(globalBlurTimeoutRef.current);
+        globalBlurTimeoutRef.current = null;
+      }
+    }, []);
+
+    const handleRepsFocus = React.useCallback(() => {
+      if (globalBlurTimeoutRef.current) {
+        clearTimeout(globalBlurTimeoutRef.current);
+        globalBlurTimeoutRef.current = null;
+      }
+    }, []);
+
+    // Handle blur events with global timeout to detect input switching
+    const handleWeightBlur = React.useCallback(() => {
+      // Store current values for the timeout
+      const currentWeight = localWeight;
+      
+      globalBlurTimeoutRef.current = setTimeout(() => {
+        // If we reach here, no other input gained focus - user clicked away
+        const weightValue = parseFloat(currentWeight) || 0;
+        onUpdateExerciseSet(exerciseIndex, setIndex, 'weight', weightValue);
+      }, 100);
+    }, [localWeight, exerciseIndex, setIndex, onUpdateExerciseSet]);
+
+    const handleRepsBlur = React.useCallback(() => {
+      // Store current values for the timeout
+      const currentReps = localReps;
+      
+      globalBlurTimeoutRef.current = setTimeout(() => {
+        // If we reach here, no other input gained focus - user clicked away
+        const repsValue = parseInt(currentReps) || 0;
+        onUpdateExerciseSet(exerciseIndex, setIndex, 'reps', repsValue);
+      }, 100);
+    }, [localReps, exerciseIndex, setIndex, onUpdateExerciseSet]);
 
     const panGesture = Gesture.Pan()
       .activeOffsetX([-10, 10])
@@ -318,10 +369,8 @@ export default function RoutineCreationModal({
                 style={styles.tableInput}
                 value={localWeight}
                 onChangeText={setLocalWeight}
-                onBlur={() => {
-                  const weightValue = parseFloat(localWeight) || 0;
-                  onUpdateExerciseSet(exerciseIndex, setIndex, 'weight', weightValue);
-                }}
+                onFocus={handleWeightFocus}
+                onBlur={handleWeightBlur}
                 keyboardType="numeric"
                 placeholder="0"
                 placeholderTextColor={theme.textMuted}
@@ -330,10 +379,8 @@ export default function RoutineCreationModal({
                 style={styles.tableInput}
                 value={localReps}
                 onChangeText={setLocalReps}
-                onBlur={() => {
-                  const repsValue = parseInt(localReps) || 0;
-                  onUpdateExerciseSet(exerciseIndex, setIndex, 'reps', repsValue);
-                }}
+                onFocus={handleRepsFocus}
+                onBlur={handleRepsBlur}
                 keyboardType="numeric"
                 placeholder="0"
                 placeholderTextColor={theme.textMuted}

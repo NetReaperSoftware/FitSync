@@ -80,4 +80,5 @@ yarn-error.log
 # Other
 sendEmail.ts
 fitness-schema-sql.txt
+public-schema-sql.txt
 sql-injects
