@@ -301,6 +301,30 @@ export default function ActiveWorkoutModal({
       setLocalReps(text);
     }, []);
 
+    // Function to save current local values to parent state
+    const saveCurrentValues = React.useCallback(() => {
+      if (localWeight) {
+        const numericWeight = parseFloat(localWeight);
+        if (!isNaN(numericWeight)) {
+          onUpdateSet(exercise.id, set.id, 'weight', numericWeight);
+        }
+      }
+      if (localReps) {
+        const numericReps = parseInt(localReps);
+        if (!isNaN(numericReps)) {
+          onUpdateSet(exercise.id, set.id, 'reps', numericReps);
+        }
+      }
+    }, [localWeight, localReps, exercise.id, set.id, onUpdateSet]);
+
+    // Handle checkbox toggle - save values first, then toggle completion
+    const handleCheckboxToggle = React.useCallback(() => {
+      // Save current values before the re-render
+      saveCurrentValues();
+      // Then toggle completion status
+      onToggleSetCompletion(exercise.id, set.id);
+    }, [saveCurrentValues, onToggleSetCompletion, exercise.id, set.id]);
+
     // Save values when component unmounts or when workout is finished
     React.useEffect(() => {
       return () => {
@@ -553,7 +577,7 @@ export default function ActiveWorkoutModal({
                   styles.checkboxButtonCompact,
                   set.completed ? styles.checkedBox : styles.uncheckedBox,
                 ]}
-                onPress={() => onToggleSetCompletion(exercise.id, set.id)}
+                onPress={handleCheckboxToggle}
               >
                 {set.completed && (
                   <Text style={styles.checkboxText}>✓</Text>
