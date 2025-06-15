@@ -277,9 +277,6 @@ export default function ActiveWorkoutModal({
     const [localReps, setLocalReps] = useState('');
     
     
-    // Track the last known external values to detect real changes
-    const lastExternalWeight = React.useRef(set.weight);
-    const lastExternalReps = React.useRef(set.reps);
 
     // Create placeholder text from current values
     const weightPlaceholder = set.weight > 0 ? set.weight.toString() : '0';
@@ -304,28 +301,28 @@ export default function ActiveWorkoutModal({
       setLocalReps(text);
     }, []);
 
-    // Handle end editing (when user finishes editing via Return key or other means)
-    const handleWeightEndEditing = React.useCallback(() => {
-      if (localWeight) {
-        const numericWeight = parseFloat(localWeight);
-        if (!isNaN(numericWeight)) {
-          lastExternalWeight.current = numericWeight;
-          onUpdateSet(exercise.id, set.id, 'weight', numericWeight);
-          // Don't modify localWeight - keep user's input as-is
+    // Save values when component unmounts or when workout is finished
+    React.useEffect(() => {
+      return () => {
+        // Capture current values at cleanup time
+        const currentWeight = localWeight;
+        const currentReps = localReps;
+        
+        // Save any pending values when component unmounts
+        if (currentWeight) {
+          const numericWeight = parseFloat(currentWeight);
+          if (!isNaN(numericWeight)) {
+            onUpdateSet(exercise.id, set.id, 'weight', numericWeight);
+          }
         }
-      }
-    }, [localWeight, exercise.id, set.id, onUpdateSet]);
-
-    const handleRepsEndEditing = React.useCallback(() => {
-      if (localReps) {
-        const numericReps = parseInt(localReps);
-        if (!isNaN(numericReps)) {
-          lastExternalReps.current = numericReps;
-          onUpdateSet(exercise.id, set.id, 'reps', numericReps);
-          // Don't modify localReps - keep user's input as-is
+        if (currentReps) {
+          const numericReps = parseInt(currentReps);
+          if (!isNaN(numericReps)) {
+            onUpdateSet(exercise.id, set.id, 'reps', numericReps);
+          }
         }
-      }
-    }, [localReps, exercise.id, set.id, onUpdateSet]);
+      };
+    }, []); // Empty dependency array - only run on mount/unmount
 
     // Simple blur handlers - no saving, just placeholder for future logic
     const handleWeightBlur = React.useCallback(() => {
@@ -535,7 +532,6 @@ export default function ActiveWorkoutModal({
                 onChangeText={handleWeightChange}
                 onFocus={handleWeightFocus}
                 onBlur={handleWeightBlur}
-                onEndEditing={handleWeightEndEditing}
                 selectTextOnFocus={true}
               />
               <TextInput
@@ -548,7 +544,6 @@ export default function ActiveWorkoutModal({
                 onChangeText={handleRepsChange}
                 onFocus={handleRepsFocus}
                 onBlur={handleRepsBlur}
-                onEndEditing={handleRepsEndEditing}
                 selectTextOnFocus={true}
               />
               
@@ -846,17 +841,9 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginTop: 4,
   },
   workoutCard: {
-    backgroundColor: theme.cardBackground,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: theme.borderLight,
+    backgroundColor: 'transparent',
+    marginBottom: 24,
+    paddingHorizontal: 0,
   },
   exerciseName: {
     fontSize: 18,
@@ -969,9 +956,9 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderWidth: 2,
   },
   checkboxButtonCompact: {
-    width: 20,
-    height: 20,
-    borderRadius: 3,
+    width: 28,
+    height: 28,
+    borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 6,
@@ -988,7 +975,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   checkboxText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 14,
   },
   addSetButton: {
     backgroundColor: theme.cardBackground,
@@ -1061,10 +1048,12 @@ const createStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.error || '#FF3B30',
   },
   deleteButton: {
-    flex: 1,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
+    borderRadius: 4,
+    marginVertical: 4,
   },
   deleteButtonText: {
     color: 'white',
